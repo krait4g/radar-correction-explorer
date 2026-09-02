@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="no-referrer">
+  <title>Radar Correction Explorer · Track Validation</title>
+  <link rel="stylesheet" href="/webjars/leaflet/1.9.4/leaflet.css">
+  <link rel="stylesheet" href="/styles.css">
+  <script defer src="/webjars/leaflet/1.9.4/leaflet.js"></script>
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
+
+  <header class="app-header">
+    <div class="brand-block">
+      <div class="brand-mark" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
+      <div>
+        <div class="eyebrow">OPEN-SOURCE · SYNTHETIC DEMO READY</div>
+        <h1>Radar Correction Explorer</h1>
+      </div>
+    </div>
+
+    <div class="system-status" aria-label="시스템 상태">
+      <span id="db-target" class="db-target" title="현재 조회 중인 데이터베이스">DB —</span>
+      <span id="db-status" class="status-pill status-checking">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>DB 확인 중</span>
+      </span>
+      <span id="schema-status" class="meta-label">스키마 —</span>
+      <span id="correction-status" class="status-pill status-muted">보정 컬럼 확인 중</span>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <section class="control-deck" aria-labelledby="search-title">
+      <div class="control-heading">
+        <div>
+          <div id="query-mode" class="section-kicker">RANGE QUERY</div>
+          <h2 id="search-title">검증 시간 범위</h2>
+        </div>
+        <div id="time-range" class="range-readout">데이터 범위를 확인하고 있습니다.</div>
+      </div>
+
+      <form id="query-form" class="query-grid">
+        <label class="field field-time field-from">
+          <span>From <small>시작 시각</small></span>
+          <input id="from-input" name="from" type="text" inputmode="numeric" autocomplete="off" maxlength="17" placeholder="202601011200" required aria-describedby="time-format-help">
+        </label>
+        <label class="field field-time field-to">
+          <span>To <small>종료 시각</small></span>
+          <input id="to-input" name="to" type="text" inputmode="numeric" autocomplete="off" maxlength="17" placeholder="202601011210" required aria-describedby="time-format-help">
+        </label>
+        <label class="field">
+          <span>Radar ID <small>범위 내 관측</small></span>
+          <select id="radar-input" name="radarId" aria-label="레이더 선택">
+            <option value="">전체 레이더 (조회 후 목록 갱신)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Object No <small>선택</small></span>
+          <input id="object-input" name="objectNo" type="text" maxlength="128" placeholder="전체 오브젝트">
+        </label>
+        <label class="switch-field" title="대표 관측치만 조회합니다.">
+          <span class="switch-copy">
+            <strong>대표 관측만</strong>
+            <small>primary flag = Y</small>
+          </span>
+          <input id="primary-input" name="primaryOnly" type="checkbox" checked>
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <button id="load-button" class="primary-button" type="submit">
+          <span class="button-icon" aria-hidden="true">↻</span>
+          <span>범위 불러오기</span>
+        </button>
+      </form>
+      <p id="time-format-help" class="time-format-help">
+        숫자 8·10·12·14·17자리: <code>yyyyMMdd[HH][mm][ss][SSS]</code>. 예: <code>202601011200</code> → 2026-01-01 12:00:00.000
+        <span id="query-limit-help" class="query-limit-help">· 조회 정책을 확인하고 있습니다.</span>
+      </p>
+      <div id="query-message" class="query-message" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="workspace" aria-label="레이더 보정 분석 영역">
+      <article class="panel map-panel" aria-labelledby="map-title">
+        <header class="panel-header map-header">
+          <div>
+            <div class="section-kicker">POSITION OVERLAY</div>
+            <h2 id="map-title">2D 위치 비교</h2>
+          </div>
+          <div class="map-legend" aria-label="지도 범례">
+            <span><i class="legend-circle"></i>원본 좌표 · 선택 시 빨강</span>
+            <span><i class="legend-triangle"></i>보정 좌표 · 선택 시 파랑</span>
+            <span><i class="legend-line"></i>오브젝트 궤적</span>
+            <span><i class="legend-vector"></i>보정 벡터</span>
+          </div>
+        </header>
+
+        <div id="map-stage" class="map-stage">
+          <div id="map" aria-label="원본과 보정 위치 지도"></div>
+          <div id="map-fallback" class="map-fallback" hidden>
+            <strong>지도 모듈을 불러오지 못했습니다.</strong>
+            <span>표와 고도 차트는 계속 사용할 수 있습니다.</span>
+          </div>
+          <div id="map-empty" class="map-empty" hidden>
+            <div class="empty-radar" aria-hidden="true"><span></span></div>
+            <strong>조회 버튼을 눌러주세요.</strong>
+            <span>원하는 시간 범위와 필터를 입력한 뒤 범위 불러오기를 실행하세요.</span>
+          </div>
+          <div class="map-overlay map-overlay-left">
+            <span id="map-time">—</span>
+            <small id="map-count">0 SAMPLES · 0 OBJECTS</small>
+          </div>
+          <div id="tile-status" class="map-overlay map-overlay-right">배경: 좌표 격자</div>
+          <div id="pair-focus" class="pair-focus" hidden>
+            <div class="pair-focus-head">
+              <div id="pair-drag-handle" class="panel-drag-handle" role="button" tabindex="0"
+                   aria-label="PAIR 카드를 잡고 이동" title="잡고 이동 · 방향키로 미세 이동 · Home으로 위치 초기화">
+                <span class="drag-grip" aria-hidden="true">⠿</span>
+                <div>
+                <span id="pair-position">PAIR —</span>
+                <strong id="pair-object">OBJECT —</strong>
+                </div>
+              </div>
+              <div class="pair-nav" aria-label="같은 트랙의 샘플 이동">
+                <button id="pair-fit" type="button" aria-label="원본과 보정 좌표를 화면에 맞춤" title="원본·보정 쌍 맞춤">⌖</button>
+                <button id="pair-prev" type="button" aria-label="이전 샘플">‹</button>
+                <button id="pair-next" type="button" aria-label="다음 샘플">›</button>
+                <button id="pair-reset-position" type="button" aria-label="PAIR 카드 위치 초기화" title="카드 위치 초기화">↺</button>
+              </div>
+            </div>
+            <div class="pair-route"><span class="pair-raw">● 원본</span><i>→</i><span class="pair-calc">▲ 보정</span></div>
+            <div class="pair-focus-meta">
+              <span id="pair-time">—</span>
+              <span id="pair-horizontal">수평 —</span>
+              <span id="pair-altitude">고도 —</span>
+            </div>
+            <small id="pair-event-id">EVENT ID —</small>
+          </div>
+          <div id="sample-popover" class="sample-popover" role="dialog" aria-modal="false"
+               aria-label="선택 샘플 원본과 보정 정보" hidden>
+            <div class="sample-popover-head">
+              <div id="sample-popover-drag-handle" class="panel-drag-handle" role="button" tabindex="0"
+                   aria-label="선택 샘플 말풍선을 잡고 이동" title="잡고 이동 · 방향키로 미세 이동 · Home으로 선택점에 복귀">
+                <span class="drag-grip" aria-hidden="true">⠿</span>
+                <div>
+                  <strong>선택 샘플</strong>
+                  <small id="sample-popover-mode">선택점 따라가기</small>
+                </div>
+              </div>
+              <div class="sample-popover-actions">
+                <button id="sample-popover-reset" type="button" aria-label="현재 선택점 옆으로 말풍선 이동" title="선택점 옆으로 복귀">⌖</button>
+                <button id="sample-popover-close" type="button" aria-label="선택 샘플 말풍선 닫기" title="닫기">×</button>
+              </div>
+            </div>
+            <div id="sample-popover-content" class="sample-popover-content"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel analyze-panel" aria-labelledby="analyze-title">
+        <header class="panel-header analyze-header">
+          <div>
+            <div class="section-kicker">ANALYZE</div>
+            <h2 id="analyze-title">보정 현황</h2>
+          </div>
+          <div class="result-badges" aria-label="조회 행 표시 상태">
+            <span id="sampling-badge" class="sampling-badge" hidden>REPRESENTATIVE</span>
+            <span id="result-badge" class="result-badge">0 ROWS</span>
+          </div>
+        </header>
+
+        <div id="summary-cards" class="summary-grid" aria-label="보정 요약">
+          <div class="metric-card">
+            <span>오브젝트</span>
+            <strong id="metric-objects">—</strong>
+            <small>현재 시점</small>
+          </div>
+          <div class="metric-card">
+            <span>보정 좌표</span>
+            <strong id="metric-coverage">—</strong>
+            <small id="metric-coverage-sub">원본 대비</small>
+          </div>
+          <div class="metric-card">
+            <span>평균 이동</span>
+            <strong id="metric-average">—</strong>
+            <small>수평 거리</small>
+          </div>
+          <div class="metric-card">
+            <span>P95 이동</span>
+            <strong id="metric-p95">—</strong>
+            <small>수평 거리</small>
+          </div>
+          <div class="metric-card">
+            <span>최대 고도차</span>
+            <strong id="metric-altitude">—</strong>
+            <small>|보정 − 원본|</small>
+          </div>
+        </div>
+
+        <div id="sampling-note" class="sampling-note" role="status" hidden></div>
+        <div id="capability-note" class="capability-note" hidden></div>
+
+        <div class="table-toolbar">
+          <div class="table-caption-group">
+            <span id="table-caption">오브젝트를 클릭하면 상세 궤적을 확인할 수 있습니다.</span>
+            <small class="altitude-source-note">참조 고도는 외부 센서 또는 기준 데이터의 참고값이며, 최종 보정 고도 출처는 DB에 별도 저장되지 않습니다.</small>
+          </div>
+          <div class="table-actions">
+            <label class="compact-field">
+              <span class="sr-only">표 검색</span>
+              <input id="table-search" type="search" placeholder="결과 내 검색">
+            </label>
+            <nav class="table-pager" aria-label="분석 결과 페이지">
+              <button id="page-prev" type="button" aria-label="이전 페이지">‹</button>
+              <span id="page-status">0 / 0</span>
+              <button id="page-next" type="button" aria-label="다음 페이지">›</button>
+            </nav>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table id="analysis-table">
+            <caption class="sr-only">레이더 원본 좌표와 보정 좌표 비교</caption>
+            <thead>
+              <tr>
+                <th scope="col" data-sort="objectNo"><button type="button">Object <span>↕</span></button></th>
+                <th scope="col" data-sort="eventTime"><button type="button">시각 <span>↕</span></button></th>
+                <th scope="col" data-sort="primaryFlag"><button type="button" title="선택적으로 제공되는 대표 관측 플래그입니다.">대표 관측 <span>↕</span></button></th>
+                <th scope="col" data-sort="rawLatitude"><button type="button">원본 위도 <span>↕</span></button></th>
+                <th scope="col" data-sort="rawLongitude"><button type="button">원본 경도 <span>↕</span></button></th>
+                <th scope="col" data-sort="rawAltitude"><button type="button">원본 고도 <span>↕</span></button></th>
+                <th scope="col" data-sort="referenceAltitude"><button type="button" title="선택적으로 제공되는 외부 센서 또는 기준 데이터의 고도입니다.">참조 고도 <span>↕</span></button></th>
+                <th scope="col" data-sort="correctedLatitude"><button type="button">보정 위도 <span>↕</span></button></th>
+                <th scope="col" data-sort="correctedLongitude"><button type="button">보정 경도 <span>↕</span></button></th>
+                <th scope="col" data-sort="correctedAltitude"><button type="button">보정 고도 <span>↕</span></button></th>
+                <th scope="col" data-sort="horizontalCorrectionMeters"><button type="button">수평 이동 <span>↕</span></button></th>
+                <th scope="col" data-sort="altitudeDeltaMeters"><button type="button">고도차 <span>↕</span></button></th>
+                <th scope="col" data-sort="correctionStatus"><button type="button">상태 <span>↕</span></button></th>
+              </tr>
+            </thead>
+            <tbody id="analysis-body"></tbody>
+          </table>
+          <div id="table-empty" class="table-empty">조회 버튼을 누르면 선택한 범위의 관측치를 표시합니다.</div>
+        </div>
+      </article>
+    </section>
+
+    <section id="detail-panel" class="panel detail-panel" aria-labelledby="detail-title">
+      <header class="panel-header detail-header">
+        <div class="detail-heading">
+          <div>
+            <div class="section-kicker">DETAIL · ALTITUDE PROFILE</div>
+            <h2 id="detail-title">오브젝트 상세</h2>
+          </div>
+          <span id="selected-object-badge" class="object-badge" hidden></span>
+          <span id="selected-radar-badge" class="radar-badge" hidden></span>
+          <span id="detail-resolution-badge" class="resolution-badge" hidden></span>
+        </div>
+        <label id="detail-window-field" class="detail-window-field">
+          <span>상세 구간</span>
+          <select id="window-select">
+            <option value="10">± 10초</option>
+            <option value="30" selected>± 30초</option>
+            <option value="60">± 1분</option>
+            <option value="120">± 2분</option>
+            <option value="300">± 5분</option>
+          </select>
+        </label>
+      </header>
+
+      <div id="detail-empty" class="detail-empty">
+        <div class="detail-empty-icon" aria-hidden="true">◎</div>
+        <div>
+          <strong>조회 버튼을 눌러 데이터를 불러와 주세요.</strong>
+          <span>조회 후 지도 마커 또는 Analyze 표의 행을 클릭하면 원본·보정 고도를 같은 시간축에서 비교합니다.</span>
+        </div>
+      </div>
+
+      <div id="detail-content" class="detail-content" hidden>
+        <aside class="detail-values" aria-label="선택 시점 좌표 상세">
+          <div class="value-block value-raw">
+            <div class="value-title"><i></i><span>원본 LOC</span></div>
+            <dl>
+              <div><dt>Latitude</dt><dd id="detail-raw-lat">—</dd></div>
+              <div><dt>Longitude</dt><dd id="detail-raw-lon">—</dd></div>
+              <div><dt>Altitude</dt><dd id="detail-raw-alt">—</dd></div>
+            </dl>
+          </div>
+          <div class="value-block value-calc">
+            <div class="value-title"><i></i><span>보정 좌표</span></div>
+            <dl>
+              <div><dt>Latitude</dt><dd id="detail-calc-lat">—</dd></div>
+              <div><dt>Longitude</dt><dd id="detail-calc-lon">—</dd></div>
+              <div><dt>Altitude</dt><dd id="detail-calc-alt">—</dd></div>
+            </dl>
+          </div>
+          <div class="delta-block">
+            <span>선택 시점 변화량</span>
+            <div><strong id="detail-horizontal">—</strong><small>수평 이동</small></div>
+            <div><strong id="detail-alt-delta">—</strong><small>고도 변화</small></div>
+            <div class="detail-time"><span id="detail-event-time">—</span></div>
+          </div>
+        </aside>
+
+        <div class="chart-section">
+          <div class="chart-header">
+            <div>
+              <h3>고도 프로파일</h3>
+              <p>선택 트랙의 전체 샘플을 불러오며, 차트 지점을 클릭하면 해당 시점으로 지도를 동기화합니다.</p>
+            </div>
+            <div class="chart-legend" aria-label="고도 차트 범례">
+              <span><i class="raw-line"></i>원본 고도</span>
+              <span><i class="calc-line"></i>보정 고도</span>
+              <span><i class="cursor-line"></i>지도 시점</span>
+            </div>
+          </div>
+          <div id="chart-wrap" class="chart-wrap">
+            <canvas id="altitude-chart" tabindex="0" aria-label="선택 오브젝트의 시간별 원본 및 보정 고도 차트"></canvas>
+            <div id="chart-tooltip" class="chart-tooltip" hidden></div>
+            <div id="chart-empty" class="chart-empty" hidden>이 구간에는 표시할 고도 데이터가 없습니다.</div>
+          </div>
+          <div class="chart-footer">
+            <span id="series-range">—</span>
+            <span id="series-count">0 samples</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <span>읽기 전용 검증 도구</span>
+    <span>원본–보정 간 이동량은 보정 효과이며, 독립적인 정답 궤적 없이 정확도 향상을 의미하지 않습니다.</span>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

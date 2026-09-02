@@ -1,0 +1,185 @@
+name: CI
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Verify on Linux
+        if: runner.os != 'Windows'
+        run: ./mvnw --batch-mode --no-transfer-progress verify
+
+      - name: Verify on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\mvnw.cmd --batch-mode --no-transfer-progress verify
+
+      - name: Validate Windows launcher contracts when present
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath 'launcher/test-launcher.ps1') {
+            & 'launcher/test-launcher.ps1'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Validate Windows distribution contents
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & '.\scripts\package-viewer.ps1' -SkipBuild
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $packageRoot = Join-Path $PWD 'dist\radar-correction-explorer'
+          $requiredFiles = @(
+            'LICENSE',
+            'THIRD-PARTY-NOTICES.md',
+            'THIRD-PARTY-LICENSES\EPL-1.0.txt',
+            'THIRD-PARTY-LICENSES\H2-2.3.232-LICENSE.txt',
+            'THIRD-PARTY-LICENSES\LEAFLET-1.9.4-LICENSE.txt',
+            'THIRD-PARTY-LICENSES\LOGBACK-1.5.18-LICENSE.txt',
+            'SECURITY.md',
+            'docs\ARCHITECTURE.md',
+            'docs\PERFORMANCE.md',
+            'docs\images\radar-correction-explorer-demo.jpg'
+          )
+          foreach ($relativePath in $requiredFiles) {
+            $packagedPath = Join-Path $packageRoot $relativePath
+            if (-not (Test-Path -LiteralPath $packagedPath -PathType Leaf)) {
+              throw "Windows package is missing required file: $relativePath"
+            }
+          }
+          if (Test-Path -LiteralPath (Join-Path $packageRoot 'viewer.config.json')) {
+            throw 'Windows package must not contain viewer.config.json.'
+          }
+          if (-not (Test-Path -LiteralPath 'dist\radar-correction-explorer-windows.zip' -PathType Leaf)) {
+            throw 'Windows package archive was not created.'
+          }
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports-${{ matrix.os }}
+          path: target/surefire-reports/
+          if-no-files-found: error
+          retention-days: 14
+
+  demo-smoke:
+    name: Synthetic demo smoke test
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Build application
+        run: ./mvnw --batch-mode --no-transfer-progress -DskipTests package
+
+      - name: Start default synthetic demo
+        id: start-demo
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar_path="$(find target -maxdepth 1 -type f -name '*.jar' -print -quit)"
+          test -n "$jar_path"
+          RADAR_DEMO_ENABLED=true \
+          RADAR_VIEWER_HOST=127.0.0.1 \
+          RADAR_VIEWER_PORT=28080 \
+          java -jar "$jar_path" > target/demo-smoke.log 2>&1 &
+          echo $! > target/demo-smoke.pid
+
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:28080/api/meta \
+              --output target/demo-meta.json; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo 'Synthetic demo did not become ready.' >&2
+          exit 1
+
+      - name: Query canonical demo range
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            'http://127.0.0.1:28080/api/tracks?from=202601011200&to=202601011210&overview=true' \
+            --output target/demo-tracks.json
+          test -s target/demo-tracks.json
+          grep -q '"points"' target/demo-tracks.json
+
+      - name: Print server log on failure
+        if: failure()
+        run: cat target/demo-smoke.log || true
+
+      - name: Stop synthetic demo
+        if: always()
+        shell: bash
+        run: |
+          if test -f target/demo-smoke.pid; then
+            kill "$(cat target/demo-smoke.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload smoke-test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: synthetic-demo-smoke
+          path: |
+            target/demo-meta.json
+            target/demo-tracks.json
+            target/demo-smoke.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload CycloneDX SBOM
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cyclonedx-sbom
+          path: target/bom.cdx.json
+          if-no-files-found: error
+          retention-days: 14

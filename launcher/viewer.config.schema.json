@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/krait4g/radar-correction-explorer/blob/main/launcher/viewer.config.schema.json",
+  "title": "Radar Correction Explorer launcher configuration",
+  "description": "Copy viewer.config.example.json to viewer.config.json to enable PostgreSQL mode. Passwords are intentionally excluded and must be supplied through RADAR_DB_PASSWORD or the secure launcher prompt.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "database"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "viewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "const": "127.0.0.1"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 28080
+        },
+        "openBrowser": {
+          "type": "boolean",
+          "default": true
+        },
+        "browserWaitSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300,
+          "default": 60
+        }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jdbcUrl", "username", "schema", "table", "columns"],
+      "properties": {
+        "jdbcUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^jdbc:postgresql://[^\\s/@]+(?::[0-9]{1,5})?/[A-Za-z0-9_.-]+(?:\\?[^\\s]*)?$"
+        },
+        "username": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_.@-]*$"
+        },
+        "displayLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "schema": {
+          "$ref": "#/$defs/sqlIdentifier"
+        },
+        "table": {
+          "$ref": "#/$defs/sqlIdentifier"
+        },
+        "columns": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "eventId",
+            "sourceEventId",
+            "observedAt",
+            "sensorId",
+            "sensorTrackId",
+            "objectId",
+            "rawLongitude",
+            "rawLatitude",
+            "rawAltitude",
+            "correctedLongitude",
+            "correctedLatitude",
+            "correctedAltitude",
+            "primaryFlag",
+            "referenceAltitude"
+          ],
+          "properties": {
+            "eventId": { "$ref": "#/$defs/sqlIdentifier" },
+            "sourceEventId": { "$ref": "#/$defs/sqlIdentifier" },
+            "observedAt": { "$ref": "#/$defs/sqlIdentifier" },
+            "sensorId": { "$ref": "#/$defs/sqlIdentifier" },
+            "sensorTrackId": { "$ref": "#/$defs/sqlIdentifier" },
+            "objectId": { "$ref": "#/$defs/sqlIdentifier" },
+            "rawLongitude": { "$ref": "#/$defs/sqlIdentifier" },
+            "rawLatitude": { "$ref": "#/$defs/sqlIdentifier" },
+            "rawAltitude": { "$ref": "#/$defs/sqlIdentifier" },
+            "correctedLongitude": { "$ref": "#/$defs/sqlIdentifier" },
+            "correctedLatitude": { "$ref": "#/$defs/sqlIdentifier" },
+            "correctedAltitude": { "$ref": "#/$defs/sqlIdentifier" },
+            "primaryFlag": { "$ref": "#/$defs/sqlIdentifier" },
+            "referenceAltitude": { "$ref": "#/$defs/sqlIdentifier" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sqlIdentifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    }
+  }
+}

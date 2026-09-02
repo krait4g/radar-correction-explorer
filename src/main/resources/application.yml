@@ -1,0 +1,73 @@
+spring:
+  application:
+    name: radar-correction-explorer
+  jackson:
+    default-property-inclusion: non_null
+
+radar:
+  db:
+    jdbc-url: '${RADAR_DB_JDBC_URL:jdbc:h2:mem:radar_demo;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1}'
+    username: ${RADAR_DB_USERNAME:sa}
+    password: ${RADAR_DB_PASSWORD:}
+    display-label: ${RADAR_DB_DISPLAY_LABEL:Synthetic demo}
+    demo-enabled: ${RADAR_DEMO_ENABLED:true}
+
+server:
+  address: ${RADAR_VIEWER_HOST:127.0.0.1}
+  port: ${RADAR_VIEWER_PORT:28080}
+  compression:
+    enabled: true
+    min-response-size: 1024
+    mime-types:
+      - application/json
+      - application/javascript
+      - application/problem+json
+      - text/css
+      - text/html
+      - text/javascript
+      - text/plain
+  error:
+    include-message: never
+
+app:
+  viewer:
+    database:
+      schema: ${RADAR_DB_SCHEMA:public}
+      table: ${RADAR_DB_TABLE:radar_observation}
+      schema-cache-seconds: ${RADAR_VIEWER_SCHEMA_CACHE_SECONDS:60}
+      columns:
+        event-id: ${RADAR_DB_COLUMN_EVENT_ID:event_id}
+        source-event-id: ${RADAR_DB_COLUMN_SOURCE_EVENT_ID:source_event_id}
+        observed-at: ${RADAR_DB_COLUMN_OBSERVED_AT:observed_at}
+        sensor-id: ${RADAR_DB_COLUMN_SENSOR_ID:sensor_id}
+        sensor-track-id: ${RADAR_DB_COLUMN_SENSOR_TRACK_ID:sensor_track_id}
+        object-id: ${RADAR_DB_COLUMN_OBJECT_ID:object_id}
+        raw-longitude: ${RADAR_DB_COLUMN_RAW_LONGITUDE:raw_longitude}
+        raw-latitude: ${RADAR_DB_COLUMN_RAW_LATITUDE:raw_latitude}
+        raw-altitude: ${RADAR_DB_COLUMN_RAW_ALTITUDE:raw_altitude}
+        corrected-longitude: ${RADAR_DB_COLUMN_CORRECTED_LONGITUDE:corrected_longitude}
+        corrected-latitude: ${RADAR_DB_COLUMN_CORRECTED_LATITUDE:corrected_latitude}
+        corrected-altitude: ${RADAR_DB_COLUMN_CORRECTED_ALTITUDE:corrected_altitude}
+        primary-flag: ${RADAR_DB_COLUMN_PRIMARY_FLAG:primary_flag}
+        reference-altitude: ${RADAR_DB_COLUMN_REFERENCE_ALTITUDE:reference_altitude}
+    limits:
+      max-tolerance-ms: ${RADAR_VIEWER_MAX_TOLERANCE_MS:30000}
+      max-window-seconds: ${RADAR_VIEWER_MAX_WINDOW_SECONDS:300}
+      max-range-seconds: ${RADAR_VIEWER_MAX_RANGE_SECONDS:3600}
+      max-query-rows: ${RADAR_VIEWER_MAX_QUERY_ROWS:100000}
+      max-overview-points: ${RADAR_VIEWER_MAX_OVERVIEW_POINTS:100000}
+      max-concurrent-overview-queries: ${RADAR_VIEWER_MAX_CONCURRENT_OVERVIEW_QUERIES:1}
+      statement-timeout-seconds: ${RADAR_VIEWER_STATEMENT_TIMEOUT_SECONDS:10}
+      overview-statement-timeout-seconds: ${RADAR_VIEWER_OVERVIEW_STATEMENT_TIMEOUT_SECONDS:60}
+    map:
+      tile-url: '${RADAR_VIEWER_MAP_TILE_URL:}'
+      attribution: '${RADAR_VIEWER_MAP_ATTRIBUTION:}'
+      initial-longitude: ${RADAR_VIEWER_MAP_INITIAL_LONGITUDE:0.0}
+      initial-latitude: ${RADAR_VIEWER_MAP_INITIAL_LATITUDE:0.0}
+      initial-zoom: ${RADAR_VIEWER_MAP_INITIAL_ZOOM:2.0}
+      max-native-zoom: ${RADAR_VIEWER_MAP_MAX_NATIVE_ZOOM:19}
+      max-zoom: ${RADAR_VIEWER_MAP_MAX_ZOOM:24}
+
+logging:
+  level:
+    io.github.krait4g.radarexplorer: INFO

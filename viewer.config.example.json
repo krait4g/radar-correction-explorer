@@ -1,0 +1,33 @@
+{
+  "$schema": "launcher/viewer.config.schema.json",
+  "schemaVersion": 1,
+  "viewer": {
+    "host": "127.0.0.1",
+    "port": 28080,
+    "openBrowser": true,
+    "browserWaitSeconds": 60
+  },
+  "database": {
+    "jdbcUrl": "jdbc:postgresql://127.0.0.1:5432/radar_demo",
+    "username": "radar_reader",
+    "displayLabel": "Local PostgreSQL",
+    "schema": "public",
+    "table": "radar_observation",
+    "columns": {
+      "eventId": "event_id",
+      "sourceEventId": "source_event_id",
+      "observedAt": "observed_at",
+      "sensorId": "sensor_id",
+      "sensorTrackId": "sensor_track_id",
+      "objectId": "object_id",
+      "rawLongitude": "raw_longitude",
+      "rawLatitude": "raw_latitude",
+      "rawAltitude": "raw_altitude",
+      "correctedLongitude": "corrected_longitude",
+      "correctedLatitude": "corrected_latitude",
+      "correctedAltitude": "corrected_altitude",
+      "primaryFlag": "primary_flag",
+      "referenceAltitude": "reference_altitude"
+    }
+  }
+}

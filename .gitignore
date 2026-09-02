@@ -1,0 +1,26 @@
+# Build and packaged output
+/target/
+/dist/
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+*.zip
+*.log
+/logs/
+hs_err_pid*
+*.hprof
+
+# Local runtime configuration and secrets
+/viewer.config.json
+/viewer.config.local.json
+.env
+.env.*
+!.env.example
+*.pid
+.tmp/
+
+# IDE and operating-system files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db

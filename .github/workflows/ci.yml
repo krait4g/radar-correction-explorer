@@ -63,6 +63,7 @@ jobs:
           $packageRoot = Join-Path $PWD 'dist\radar-correction-explorer'
           $requiredFiles = @(
             'LICENSE',
+            'NOTICE',
             'THIRD-PARTY-NOTICES.md',
             'THIRD-PARTY-LICENSES\EPL-1.0.txt',
             'THIRD-PARTY-LICENSES\H2-2.3.232-LICENSE.txt',

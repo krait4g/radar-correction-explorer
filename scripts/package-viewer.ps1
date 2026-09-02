@@ -96,6 +96,7 @@ $requiredFiles = @(
     "launcher\start-viewer.ps1",
     "launcher\viewer.config.schema.json",
     "LICENSE",
+    "NOTICE",
     "THIRD-PARTY-NOTICES.md",
     "THIRD-PARTY-LICENSES\EPL-1.0.txt",
     "THIRD-PARTY-LICENSES\H2-2.3.232-LICENSE.txt",
@@ -136,6 +137,7 @@ Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "viewer.config.example.js
 Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "launcher\start-viewer.ps1") -Destination (Join-Path $packageDirectory "launcher\start-viewer.ps1")
 Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "launcher\viewer.config.schema.json") -Destination (Join-Path $packageDirectory "launcher\viewer.config.schema.json")
 Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "LICENSE") -Destination (Join-Path $packageDirectory "LICENSE")
+Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "NOTICE") -Destination (Join-Path $packageDirectory "NOTICE")
 Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "THIRD-PARTY-NOTICES.md") -Destination (Join-Path $packageDirectory "THIRD-PARTY-NOTICES.md")
 Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "THIRD-PARTY-LICENSES") -Destination $packageDirectory -Recurse
 Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "SECURITY.md") -Destination (Join-Path $packageDirectory "SECURITY.md")

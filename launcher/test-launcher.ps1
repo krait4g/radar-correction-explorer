@@ -191,8 +191,8 @@ try {
     Assert-True ($capturedEnvironment["RADAR_DB_COLUMN_REFERENCE_ALTITUDE"] -eq $runtimeConfig.database.columns.referenceAltitude) "Reference-altitude mapping reaches Java"
 
     $gitIgnoreText = Get-Content -LiteralPath (Join-Path $projectRoot ".gitignore") -Raw
-    Assert-True ($gitIgnoreText -match "(?m)^/viewer\.config\.json$") "Live config is ignored"
-    Assert-True ($gitIgnoreText -match "(?m)^/dist/$") "Package output is ignored"
+    Assert-True ($gitIgnoreText -match "(?m)^/viewer\.config\.json\r?$") "Live config is ignored"
+    Assert-True ($gitIgnoreText -match "(?m)^/dist/\r?$") "Package output is ignored"
 
     $fakeJar = Join-Path $testRoot "fake.jar"
     [System.IO.File]::WriteAllBytes($fakeJar, [byte[]](80, 75, 3, 4))

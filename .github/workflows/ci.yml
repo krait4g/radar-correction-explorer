@@ -70,6 +70,7 @@ jobs:
             'THIRD-PARTY-LICENSES\LEAFLET-1.9.4-LICENSE.txt',
             'THIRD-PARTY-LICENSES\LOGBACK-1.5.18-LICENSE.txt',
             'SECURITY.md',
+            'docs\API.md',
             'docs\ARCHITECTURE.md',
             'docs\PERFORMANCE.md',
             'docs\images\radar-correction-explorer-demo.jpg'
@@ -152,6 +153,19 @@ jobs:
           test -s target/demo-tracks.json
           grep -q '"points"' target/demo-tracks.json
 
+          curl --fail --silent --show-error \
+            'http://127.0.0.1:28080/api/observations?from=202601011200&to=202601011210&source=RADAR&source=RFSCNR&overview=true' \
+            --output target/demo-observations.json
+          grep -q '"radarPoints"' target/demo-observations.json
+          grep -q '"rfScannerPoints"' target/demo-observations.json
+          grep -q '"selectedSources"' target/demo-observations.json
+
+          curl --fail --silent --show-error \
+            'http://127.0.0.1:28080/api/sensors?from=202601011200&to=202601011210&source=RADAR&source=RFSCNR' \
+            --output target/demo-sensors.json
+          grep -q '"radars"' target/demo-sensors.json
+          grep -q '"rfScanners"' target/demo-sensors.json
+
       - name: Print server log on failure
         if: failure()
         run: cat target/demo-smoke.log || true
@@ -172,6 +186,8 @@ jobs:
           path: |
             target/demo-meta.json
             target/demo-tracks.json
+            target/demo-observations.json
+            target/demo-sensors.json
             target/demo-smoke.log
           if-no-files-found: warn
           retention-days: 14

@@ -49,7 +49,9 @@ public record SchemaCapabilities(boolean tableExists, Set<String> columns, Colum
                 has(mapping.getCorrectedLatitude()),
                 has(mapping.getCorrectedAltitude()),
                 has(mapping.getPrimaryFlag()),
-                has(mapping.getReferenceAltitude())
+                has(mapping.getReferenceAltitude()),
+                isReady(),
+                isReady()
         );
     }
 

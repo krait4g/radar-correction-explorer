@@ -3,6 +3,7 @@ package io.github.krait4g.radarexplorer;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.krait4g.radarexplorer.repository.RadarEventRepository;
+import io.github.krait4g.radarexplorer.repository.RfScannerObservationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -20,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
@@ -58,6 +60,9 @@ class RadarViewerIntegrationTest {
     private RadarEventRepository repository;
 
     @Autowired
+    private RfScannerObservationRepository rfScannerRepository;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     @Autowired
@@ -66,6 +71,8 @@ class RadarViewerIntegrationTest {
     @BeforeEach
     void createBaseTableWithoutOptionalColumns() {
         repository.invalidateSchemaCache();
+        rfScannerRepository.invalidateSchemaCache();
+        jdbcTemplate.execute("DROP TABLE IF EXISTS rf_scanner_observation");
         jdbcTemplate.execute("DROP TABLE IF EXISTS radar_observation");
         jdbcTemplate.execute("""
                 CREATE TABLE radar_observation (
@@ -544,6 +551,269 @@ class RadarViewerIntegrationTest {
                 .andExpect(jsonPath("$.limits.maxOverviewPoints").value(5));
     }
 
+    @Test
+    void unifiedObservationsSupportBothSourcesMultiSensorFiltersAndGenericRfFields() throws Exception {
+        createRfScannerTable();
+        insert(700, "20260813143000000", "R1", "11", "1001", "127.0", "37.0", "100");
+        insert(701, "20260813143001000", "R2", "21", "1002", "127.1", "37.1", "110");
+        insert(702, "20260813143002000", "R3", "31", "1003", "127.2", "37.2", "120");
+        insertRf(800, "20260813143000000", null, "RF-A", "TRACK-A", "1001");
+        insertRf(801, null, "20260813143001000", "RF-B", "TRACK-B", null);
+        insertRf(802, "20260813143002000", null, "RF-C", "TRACK-C", "1003");
+
+        mockMvc.perform(get("/api/observations")
+                        .param("from", "20260813143000000")
+                        .param("to", "20260813143003000")
+                        .param("source", "RADAR,RFSCNR")
+                        .param("radarId", "R1", "R2")
+                        .param("rfScannerId", "RF-A,RF-B")
+                        .param("primaryOnly", "false"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.selectedSources", hasSize(2)))
+                .andExpect(jsonPath("$.summary.sourceRows").value(4))
+                .andExpect(jsonPath("$.radarPoints", hasSize(2)))
+                .andExpect(jsonPath("$.rfScannerPoints", hasSize(2)))
+                .andExpect(jsonPath("$.rfScannerPoints[0].eventId").value(800))
+                .andExpect(jsonPath("$.rfScannerPoints[0].rfScannerId").value("RF-A"))
+                .andExpect(jsonPath("$.rfScannerPoints[0].trackId").value("TRACK-A"))
+                .andExpect(jsonPath("$.rfScannerPoints[0].matched").value(true))
+                .andExpect(jsonPath("$.rfScannerPoints[0].position.longitude").value(127.5))
+                .andExpect(jsonPath("$.rfScannerPoints[0].home.altitude").value(32.5))
+                .andExpect(jsonPath("$.rfScannerPoints[0].altitudeReference").value("RELATIVE_TO_HOME"))
+                .andExpect(jsonPath("$.rfScannerPoints[1].timeSource").value("FALLBACK_OBSERVED_AT"))
+                .andExpect(jsonPath("$.rfScannerPoints[1].matched").value(false));
+    }
+
+    @Test
+    void unifiedSnapshotKeepsNearestPointPerPhysicalTrackAndObjectMatchIsPointInTime() throws Exception {
+        createRfScannerTable();
+        insert(710, "20260813143159900", "R1", "11", "1001", "127.0", "37.0", "100");
+        insert(711, "20260813143200100", "R1", "11", "1001", "127.1", "37.1", "101");
+        insert(712, "20260813143200050", "R1", "12", "1001", "127.2", "37.2", "102");
+        insertRf(810, "20260813143159900", null, "RF-A", "TRACK-A", null);
+        insertRf(811, "20260813143200100", null, "RF-A", "TRACK-A", "1001");
+        insertRf(812, "20260813143200050", null, "RF-A", "TRACK-B", "1001");
+
+        mockMvc.perform(get("/api/observations")
+                        .param("from", "20260813143200000")
+                        .param("to", "20260813143200000")
+                        .param("toleranceMs", "500")
+                        .param("source", "RADAR", "RFSCNR")
+                        .param("primaryOnly", "false"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sampling.strategy").value("SNAPSHOT_NEAREST_PER_PHYSICAL_TRACK"))
+                .andExpect(jsonPath("$.sampling.sourceRows").value(6))
+                .andExpect(jsonPath("$.radarPoints", hasSize(2)))
+                .andExpect(jsonPath("$.rfScannerPoints", hasSize(2)))
+                .andExpect(jsonPath("$.radarPoints[0].eventId").value(710))
+                .andExpect(jsonPath("$.rfScannerPoints[0].eventId").value(810))
+                .andExpect(jsonPath("$.summary.matchedRfScannerPointCount").value(2))
+                .andExpect(jsonPath("$.summary.unmatchedRfScannerPointCount").value(1));
+
+        mockMvc.perform(get("/api/observations")
+                        .param("from", "20260813143159000")
+                        .param("to", "20260813143201000")
+                        .param("source", "RFSCNR")
+                        .param("objectNo", "1001")
+                        .param("overview", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rfScannerPoints", hasSize(2)))
+                .andExpect(jsonPath("$.rfScannerPoints[0].eventId").value(812))
+                .andExpect(jsonPath("$.rfScannerPoints[1].eventId").value(811));
+    }
+
+    @Test
+    void mixedOverviewUsesOneGlobalBudgetAndKeepsFullRangeMatchStatistics() throws Exception {
+        createRfScannerTable();
+        for (int index = 0; index < 4; index++) {
+            insert(720 + index, "2026081314330" + index + "000", "R1", "11", "1001",
+                    "127.0000000" + index, "37.0000000" + index, "100");
+            insertRf(820 + index, "2026081314330" + index + "500", null,
+                    "RF-A", "TRACK-A", index % 2 == 0 ? "1001" : null);
+        }
+
+        String body = mockMvc.perform(get("/api/observations")
+                        .param("from", "20260813143300000")
+                        .param("to", "20260813143310000")
+                        .param("source", "RADAR,RFSCNR")
+                        .param("primaryOnly", "false"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sampling.sampled").value(true))
+                .andExpect(jsonPath("$.sampling.sourceRows").value(8))
+                .andExpect(jsonPath("$.sampling.returnedRows").value(5))
+                .andExpect(jsonPath("$.summary.sourceRows").value(8))
+                .andExpect(jsonPath("$.summary.matchedRfScannerPointCount").value(2))
+                .andExpect(jsonPath("$.summary.unmatchedRfScannerPointCount").value(2))
+                .andExpect(jsonPath("$.rfScannerSummary.sourceRows").value(4))
+                .andExpect(jsonPath("$.rfScannerSummary.matchedPointCount").value(2))
+                .andExpect(jsonPath("$.rfScannerSummary.representedRows").isNumber())
+                .andReturn().getResponse().getContentAsString();
+        var json = objectMapper.readTree(body);
+        int rfReturned = json.path("rfScannerPoints").size();
+        assertEquals(5, json.path("radarPoints").size() + rfReturned);
+        assertEquals(rfReturned, json.path("rfScannerSummary").path("representedRows").asInt());
+    }
+
+    @Test
+    void sourceAwareSensorsAndRfOnlyMetaDoNotRequireTheOtherTable() throws Exception {
+        insert(730, "20260813143400000", "R1", "11", "1001", "127.0", "37.0", "100");
+        mockMvc.perform(get("/api/sensors")
+                        .param("from", "20260813143400000")
+                        .param("to", "20260813143401000")
+                        .param("source", "RADAR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.selectedSources[0]").value("RADAR"))
+                .andExpect(jsonPath("$.radars", hasSize(1)))
+                .andExpect(jsonPath("$.rfScanners", hasSize(0)));
+
+        createRfScannerTable();
+        insertRf(830, "20260813143400000", null, "RF-A", "TRACK-A", "1001");
+        jdbcTemplate.execute("DROP TABLE radar_observation");
+        repository.invalidateSchemaCache();
+
+        mockMvc.perform(get("/api/meta"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.database.status").value("UP"))
+                .andExpect(jsonPath("$.capabilities.radarReady").value(false))
+                .andExpect(jsonPath("$.rfScannerCapabilities.ready").value(true))
+                .andExpect(jsonPath("$.timeRange.min").value("20260813143400000"))
+                .andExpect(jsonPath("$.rfScannerTimeRange.min").value("20260813143400000"));
+
+        mockMvc.perform(get("/api/sensors")
+                        .param("from", "20260813143400000")
+                        .param("to", "20260813143401000")
+                        .param("source", "RFSCNR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.radars", hasSize(0)))
+                .andExpect(jsonPath("$.rfScanners", hasSize(1)));
+    }
+
+    @Test
+    void rfScannerUsesFallbackOnlyForInvalidPrimaryTimeAndSupportsMatchModes() throws Exception {
+        createRfScannerTable();
+        insertRf(840, "abcdefghijklmnopq", "20260813143500000", "RF-A", "TRACK-A", "1001");
+        insertRf(841, "20260813143501000", "20260813150000000", "RF-A", "TRACK-B", null);
+
+        String[] range = rfScannerRepository.findTimeRange(rfScannerRepository.inspectSchema());
+        assertEquals("20260813143500000", range[0]);
+        assertEquals("20260813143501000", range[1]);
+
+        mockMvc.perform(get("/api/observations")
+                        .param("from", "20260813143500000")
+                        .param("to", "20260813143502000")
+                        .param("source", "RFSCNR")
+                        .param("matchMode", "MATCHED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rfScannerPoints", hasSize(1)))
+                .andExpect(jsonPath("$.rfScannerPoints[0].eventId").value(840))
+                .andExpect(jsonPath("$.rfScannerPoints[0].timeSource").value("FALLBACK_OBSERVED_AT"));
+
+        mockMvc.perform(get("/api/observations")
+                        .param("from", "20260813143500000")
+                        .param("to", "20260813143502000")
+                        .param("source", "RFSCNR")
+                        .param("matchMode", "UNMATCHED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rfScannerPoints", hasSize(1)))
+                .andExpect(jsonPath("$.rfScannerPoints[0].eventId").value(841));
+    }
+
+    @Test
+    void missingOptionalRfScannerSourceDoesNotBreakRadarButExplicitRequestIsUnavailable() throws Exception {
+        insert(850, "20260813143600000", "R1", "11", "1001", "127.0", "37.0", "100");
+
+        mockMvc.perform(get("/api/observations")
+                        .param("from", "20260813143600000")
+                        .param("to", "20260813143601000")
+                        .param("primaryOnly", "false"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.selectedSources", hasSize(1)))
+                .andExpect(jsonPath("$.selectedSources[0]").value("RADAR"))
+                .andExpect(jsonPath("$.radarPoints", hasSize(1)))
+                .andExpect(jsonPath("$.warnings", hasSize(1)));
+
+        mockMvc.perform(get("/api/observations")
+                        .param("from", "20260813143600000")
+                        .param("to", "20260813143601000")
+                        .param("source", "RFSCNR"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("RFSCNR_SCHEMA_UNAVAILABLE"));
+    }
+
+    @Test
+    void unifiedExactRangeAcceptsUniquePhysicalTrackFiltersForEachSource() throws Exception {
+        createRfScannerTable();
+        insert(860, "20260813143700000", "R1", "11", "1001", "127.0", "37.0", "100");
+        insert(861, "20260813143701000", "R1", "11", "1001", "127.1", "37.1", "101");
+        insert(862, "20260813143702000", "R1", "12", "1001", "127.2", "37.2", "102");
+        insertRf(870, "20260813143700000", null, "RF-A", "TRACK-A", null);
+        insertRf(871, "20260813143701000", null, "RF-A", "TRACK-A", "1001");
+        insertRf(872, "20260813143702000", null, "RF-A", "TRACK-B", "1001");
+
+        mockMvc.perform(get("/api/observations")
+                        .param("from", "20260813143700000")
+                        .param("to", "20260813143703000")
+                        .param("source", "RADAR")
+                        .param("radarId", "R1")
+                        .param("radarObjectNo", "11")
+                        .param("primaryOnly", "false")
+                        .param("overview", "false"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sampling.sampled").value(false))
+                .andExpect(jsonPath("$.radarPoints", hasSize(2)))
+                .andExpect(jsonPath("$.rfScannerPoints", hasSize(0)));
+
+        mockMvc.perform(get("/api/observations")
+                        .param("from", "20260813143700000")
+                        .param("to", "20260813143703000")
+                        .param("source", "RFSCNR")
+                        .param("rfScannerId", "RF-A")
+                        .param("trackId", "TRACK-A")
+                        .param("overview", "false"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.radarPoints", hasSize(0)))
+                .andExpect(jsonPath("$.rfScannerPoints", hasSize(2)));
+
+        mockMvc.perform(get("/api/observations")
+                        .param("from", "20260813143700000")
+                        .param("to", "20260813143703000")
+                        .param("source", "RFSCNR")
+                        .param("trackId", "TRACK-A")
+                        .param("overview", "false"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("OBJECT_FILTER_REQUIRED"));
+
+        mockMvc.perform(get("/api/observations")
+                        .param("from", "20260813143700000")
+                        .param("to", "20260813143703000")
+                        .param("source", "RFSCNR")
+                        .param("rfScannerId", "RF-A", "RF-B")
+                        .param("trackId", "TRACK-A")
+                        .param("overview", "false"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("OBJECT_FILTER_REQUIRED"));
+
+        mockMvc.perform(get("/api/observations")
+                        .param("from", "20260813143700000")
+                        .param("to", "20260813143703000")
+                        .param("source", "RADAR")
+                        .param("overview", "false"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("OBJECT_FILTER_REQUIRED"));
+    }
+
+    @Test
+    void apiResponsesAreNoStoreButStaticAssetsKeepNormalCachingPolicy() throws Exception {
+        mockMvc.perform(get("/api/meta"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store, max-age=0"))
+                .andExpect(header().string("Pragma", "no-cache"));
+
+        mockMvc.perform(get("/index.html"))
+                .andExpect(status().isOk())
+                .andExpect(header().doesNotExist("Pragma"));
+    }
+
     private void insert(
             long sequence,
             String eventTime,
@@ -562,6 +832,49 @@ class RadarViewerIntegrationTest {
                         """,
                 sequence, eventTime, radarId, radarObjectNo, objectNo,
                 new java.math.BigDecimal(longitude), new java.math.BigDecimal(latitude), new java.math.BigDecimal(altitude)
+        );
+    }
+
+    private void createRfScannerTable() {
+        rfScannerRepository.invalidateSchemaCache();
+        jdbcTemplate.execute("""
+                CREATE TABLE rf_scanner_observation (
+                    event_id BIGINT NOT NULL,
+                    observed_at VARCHAR(17),
+                    fallback_observed_at VARCHAR(17),
+                    scanner_id VARCHAR(64) NOT NULL,
+                    scanner_track_id VARCHAR(128) NOT NULL,
+                    object_id BIGINT,
+                    longitude NUMERIC(13,8),
+                    latitude NUMERIC(13,8),
+                    altitude NUMERIC(13,3),
+                    home_longitude NUMERIC(13,8),
+                    home_latitude NUMERIC(13,8),
+                    home_altitude NUMERIC(13,3)
+                )
+                """);
+        jdbcTemplate.execute("CREATE INDEX ix_rf_time_track ON rf_scanner_observation(observed_at, scanner_id, scanner_track_id)");
+        jdbcTemplate.execute("CREATE INDEX ix_rf_fallback_track ON rf_scanner_observation(fallback_observed_at, scanner_id, scanner_track_id)");
+        rfScannerRepository.invalidateSchemaCache();
+    }
+
+    private void insertRf(
+            long eventId,
+            String observedAt,
+            String fallbackObservedAt,
+            String scannerId,
+            String trackId,
+            String objectNo
+    ) {
+        jdbcTemplate.update("""
+                        INSERT INTO rf_scanner_observation (
+                            event_id, observed_at, fallback_observed_at, scanner_id, scanner_track_id,
+                            object_id, longitude, latitude, altitude,
+                            home_longitude, home_latitude, home_altitude
+                        ) VALUES (?, ?, ?, ?, ?, ?, 127.50000000, 37.50000000, 45.000,
+                                  127.40000000, 37.40000000, 32.500)
+                        """,
+                eventId, observedAt, fallbackObservedAt, scannerId, trackId, objectNo
         );
     }
 }

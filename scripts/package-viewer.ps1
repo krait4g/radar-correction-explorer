@@ -103,6 +103,7 @@ $requiredFiles = @(
     "THIRD-PARTY-LICENSES\LEAFLET-1.9.4-LICENSE.txt",
     "THIRD-PARTY-LICENSES\LOGBACK-1.5.18-LICENSE.txt",
     "SECURITY.md",
+    "docs\API.md",
     "docs\ARCHITECTURE.md",
     "docs\PERFORMANCE.md",
     "docs\images\radar-correction-explorer-demo.jpg"
@@ -141,6 +142,7 @@ Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "NOTICE") -Destination (J
 Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "THIRD-PARTY-NOTICES.md") -Destination (Join-Path $packageDirectory "THIRD-PARTY-NOTICES.md")
 Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "THIRD-PARTY-LICENSES") -Destination $packageDirectory -Recurse
 Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "SECURITY.md") -Destination (Join-Path $packageDirectory "SECURITY.md")
+Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "docs\API.md") -Destination (Join-Path $packageDirectory "docs\API.md")
 Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "docs\ARCHITECTURE.md") -Destination (Join-Path $packageDirectory "docs\ARCHITECTURE.md")
 Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "docs\PERFORMANCE.md") -Destination (Join-Path $packageDirectory "docs\PERFORMANCE.md")
 Copy-Item -LiteralPath (Join-Path $resolvedProjectRoot "docs\images\radar-correction-explorer-demo.jpg") -Destination (Join-Path $packageDirectory "docs\images\radar-correction-explorer-demo.jpg")

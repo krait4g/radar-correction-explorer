@@ -46,12 +46,19 @@ public class ViewerProperties {
         @Pattern(regexp = IDENTIFIER_PATTERN, message = "must be a simple SQL identifier")
         private String table = "radar_observation";
 
+        @NotBlank
+        @Pattern(regexp = IDENTIFIER_PATTERN, message = "must be a simple SQL identifier")
+        private String rfScannerTable = "rf_scanner_observation";
+
         @Min(0)
         @Max(3_600)
         private int schemaCacheSeconds = 60;
 
         @Valid
         private final Columns columns = new Columns();
+
+        @Valid
+        private final RfScannerColumns rfScannerColumns = new RfScannerColumns();
 
         public String getSchema() {
             return schema;
@@ -69,6 +76,14 @@ public class ViewerProperties {
             this.table = table;
         }
 
+        public String getRfScannerTable() {
+            return rfScannerTable;
+        }
+
+        public void setRfScannerTable(String rfScannerTable) {
+            this.rfScannerTable = rfScannerTable;
+        }
+
         public int getSchemaCacheSeconds() {
             return schemaCacheSeconds;
         }
@@ -81,8 +96,16 @@ public class ViewerProperties {
             return columns;
         }
 
+        public RfScannerColumns getRfScannerColumns() {
+            return rfScannerColumns;
+        }
+
         public String qualifiedTable() {
             return schema + "." + table;
+        }
+
+        public String qualifiedRfScannerTable() {
+            return schema + "." + rfScannerTable;
         }
     }
 
@@ -261,6 +284,84 @@ public class ViewerProperties {
         public void setReferenceAltitude(String referenceAltitude) {
             this.referenceAltitude = referenceAltitude;
         }
+    }
+
+    /** Maps a deployment's RF scanner observation columns to generic logical names. */
+    public static class RfScannerColumns {
+        private static final String IDENTIFIER_PATTERN = "[A-Za-z_][A-Za-z0-9_]*";
+
+        @NotBlank
+        @Pattern(regexp = IDENTIFIER_PATTERN, message = "must be a simple SQL identifier")
+        private String eventId = "event_id";
+
+        @NotBlank
+        @Pattern(regexp = IDENTIFIER_PATTERN, message = "must be a simple SQL identifier")
+        private String observedAt = "observed_at";
+
+        @NotBlank
+        @Pattern(regexp = IDENTIFIER_PATTERN, message = "must be a simple SQL identifier")
+        private String fallbackObservedAt = "fallback_observed_at";
+
+        @NotBlank
+        @Pattern(regexp = IDENTIFIER_PATTERN, message = "must be a simple SQL identifier")
+        private String scannerId = "scanner_id";
+
+        @NotBlank
+        @Pattern(regexp = IDENTIFIER_PATTERN, message = "must be a simple SQL identifier")
+        private String trackId = "scanner_track_id";
+
+        @NotBlank
+        @Pattern(regexp = IDENTIFIER_PATTERN, message = "must be a simple SQL identifier")
+        private String objectId = "object_id";
+
+        @NotBlank
+        @Pattern(regexp = IDENTIFIER_PATTERN, message = "must be a simple SQL identifier")
+        private String longitude = "longitude";
+
+        @NotBlank
+        @Pattern(regexp = IDENTIFIER_PATTERN, message = "must be a simple SQL identifier")
+        private String latitude = "latitude";
+
+        @NotBlank
+        @Pattern(regexp = IDENTIFIER_PATTERN, message = "must be a simple SQL identifier")
+        private String altitude = "altitude";
+
+        @NotBlank
+        @Pattern(regexp = IDENTIFIER_PATTERN, message = "must be a simple SQL identifier")
+        private String homeLongitude = "home_longitude";
+
+        @NotBlank
+        @Pattern(regexp = IDENTIFIER_PATTERN, message = "must be a simple SQL identifier")
+        private String homeLatitude = "home_latitude";
+
+        @NotBlank
+        @Pattern(regexp = IDENTIFIER_PATTERN, message = "must be a simple SQL identifier")
+        private String homeAltitude = "home_altitude";
+
+        public String getEventId() { return eventId; }
+        public void setEventId(String eventId) { this.eventId = eventId; }
+        public String getObservedAt() { return observedAt; }
+        public void setObservedAt(String observedAt) { this.observedAt = observedAt; }
+        public String getFallbackObservedAt() { return fallbackObservedAt; }
+        public void setFallbackObservedAt(String fallbackObservedAt) { this.fallbackObservedAt = fallbackObservedAt; }
+        public String getScannerId() { return scannerId; }
+        public void setScannerId(String scannerId) { this.scannerId = scannerId; }
+        public String getTrackId() { return trackId; }
+        public void setTrackId(String trackId) { this.trackId = trackId; }
+        public String getObjectId() { return objectId; }
+        public void setObjectId(String objectId) { this.objectId = objectId; }
+        public String getLongitude() { return longitude; }
+        public void setLongitude(String longitude) { this.longitude = longitude; }
+        public String getLatitude() { return latitude; }
+        public void setLatitude(String latitude) { this.latitude = latitude; }
+        public String getAltitude() { return altitude; }
+        public void setAltitude(String altitude) { this.altitude = altitude; }
+        public String getHomeLongitude() { return homeLongitude; }
+        public void setHomeLongitude(String homeLongitude) { this.homeLongitude = homeLongitude; }
+        public String getHomeLatitude() { return homeLatitude; }
+        public void setHomeLatitude(String homeLatitude) { this.homeLatitude = homeLatitude; }
+        public String getHomeAltitude() { return homeAltitude; }
+        public void setHomeAltitude(String homeAltitude) { this.homeAltitude = homeAltitude; }
     }
 
     public static class Limits {

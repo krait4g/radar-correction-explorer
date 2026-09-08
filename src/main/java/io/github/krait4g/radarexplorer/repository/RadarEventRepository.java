@@ -122,7 +122,23 @@ public class RadarEventRepository {
             boolean primaryOnly,
             int limit
     ) {
-        FilteredQuery filter = filteredQuery(schema, from, to, radarId, radarObjectNo, objectNo, primaryOnly);
+        return findBetweenAnyRadar(
+                schema, from, to, radarId == null ? List.of() : List.of(radarId),
+                radarObjectNo, objectNo, primaryOnly, limit
+        );
+    }
+
+    public List<RadarPoint> findBetweenAnyRadar(
+            SchemaCapabilities schema,
+            String from,
+            String to,
+            List<String> radarIds,
+            Long radarObjectNo,
+            Long objectNo,
+            boolean primaryOnly,
+            int limit
+    ) {
+        FilteredQuery filter = filteredQuery(schema, from, to, radarIds, radarObjectNo, objectNo, primaryOnly);
         StringBuilder sql = new StringBuilder("SELECT ")
                 .append(selectColumns(schema))
                 .append(" FROM ").append(qualifiedTable())
@@ -146,8 +162,23 @@ public class RadarEventRepository {
             Long objectNo,
             boolean primaryOnly
     ) {
+        return findTrackCountsBetweenAnyRadar(
+                schema, from, to, radarId == null ? List.of() : List.of(radarId),
+                radarObjectNo, objectNo, primaryOnly
+        );
+    }
+
+    public List<TrackCount> findTrackCountsBetweenAnyRadar(
+            SchemaCapabilities schema,
+            String from,
+            String to,
+            List<String> radarIds,
+            Long radarObjectNo,
+            Long objectNo,
+            boolean primaryOnly
+    ) {
         Columns columns = mapping();
-        FilteredQuery filter = filteredQuery(schema, from, to, radarId, radarObjectNo, objectNo, primaryOnly);
+        FilteredQuery filter = filteredQuery(schema, from, to, radarIds, radarObjectNo, objectNo, primaryOnly);
         String sql = "SELECT "
                 + alias(columns.getObjectId(), OBJECT_ID) + ", "
                 + alias(columns.getSensorId(), SENSOR_ID) + ", "
@@ -179,7 +210,23 @@ public class RadarEventRepository {
             boolean primaryOnly,
             Consumer<RadarPoint> consumer
     ) {
-        FilteredQuery filter = filteredQuery(schema, from, to, radarId, radarObjectNo, objectNo, primaryOnly);
+        streamBetweenAnyRadar(
+                schema, from, to, radarId == null ? List.of() : List.of(radarId),
+                radarObjectNo, objectNo, primaryOnly, consumer
+        );
+    }
+
+    public void streamBetweenAnyRadar(
+            SchemaCapabilities schema,
+            String from,
+            String to,
+            List<String> radarIds,
+            Long radarObjectNo,
+            Long objectNo,
+            boolean primaryOnly,
+            Consumer<RadarPoint> consumer
+    ) {
+        FilteredQuery filter = filteredQuery(schema, from, to, radarIds, radarObjectNo, objectNo, primaryOnly);
         String sql = "SELECT " + selectColumns(schema) + " FROM " + qualifiedTable()
                 + filter.whereClause() + pointOrder(schema);
         jdbcTemplate.query(
@@ -249,7 +296,7 @@ public class RadarEventRepository {
             SchemaCapabilities schema,
             String from,
             String to,
-            String radarId,
+            List<String> radarIds,
             Long radarObjectNo,
             Long objectNo,
             boolean primaryOnly
@@ -260,9 +307,11 @@ public class RadarEventRepository {
         List<Object> arguments = new ArrayList<>();
         arguments.add(from);
         arguments.add(to);
-        if (radarId != null) {
-            where.append(" AND ").append(columns.getSensorId()).append(" = ?");
-            arguments.add(radarId);
+        if (radarIds != null && !radarIds.isEmpty()) {
+            where.append(" AND ").append(columns.getSensorId()).append(" IN (")
+                    .append(String.join(", ", java.util.Collections.nCopies(radarIds.size(), "?")))
+                    .append(')');
+            arguments.addAll(radarIds);
         }
         if (radarObjectNo != null) {
             where.append(" AND ").append(columns.getSensorTrackId()).append(" = ?");

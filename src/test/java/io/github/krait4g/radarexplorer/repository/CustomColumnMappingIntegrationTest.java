@@ -27,13 +27,29 @@ import static org.assertj.core.api.Assertions.assertThat;
                 "app.viewer.database.columns.corrected-latitude=output_lat",
                 "app.viewer.database.columns.corrected-altitude=output_alt",
                 "app.viewer.database.columns.primary-flag=selected_flag",
-                "app.viewer.database.columns.reference-altitude=aux_alt"
+                "app.viewer.database.columns.reference-altitude=aux_alt",
+                "app.viewer.database.rf-scanner-table=sample_rf_track",
+                "app.viewer.database.rf-scanner-columns.event-id=rf_sample_id",
+                "app.viewer.database.rf-scanner-columns.observed-at=rf_sample_time",
+                "app.viewer.database.rf-scanner-columns.fallback-observed-at=rf_fallback_time",
+                "app.viewer.database.rf-scanner-columns.scanner-id=rf_device_name",
+                "app.viewer.database.rf-scanner-columns.track-id=rf_device_track",
+                "app.viewer.database.rf-scanner-columns.object-id=rf_target_number",
+                "app.viewer.database.rf-scanner-columns.longitude=rf_lon",
+                "app.viewer.database.rf-scanner-columns.latitude=rf_lat",
+                "app.viewer.database.rf-scanner-columns.altitude=rf_alt",
+                "app.viewer.database.rf-scanner-columns.home-longitude=origin_lon",
+                "app.viewer.database.rf-scanner-columns.home-latitude=origin_lat",
+                "app.viewer.database.rf-scanner-columns.home-altitude=origin_alt"
         }
 )
 class CustomColumnMappingIntegrationTest {
 
     @Autowired
     private RadarEventRepository repository;
+
+    @Autowired
+    private RfScannerObservationRepository rfScannerRepository;
 
     @Test
     void queriesCustomPhysicalIdentifiersThroughCanonicalAliases() {
@@ -52,5 +68,20 @@ class CustomColumnMappingIntegrationTest {
                 false,
                 0
         )).hasSize(DemoDataInitializer.EXPECTED_ROWS / 4);
+
+        RfScannerSchemaCapabilities rfSchema = rfScannerRepository.inspectSchema();
+        assertThat(rfSchema.isReady()).isTrue();
+        assertThat(rfScannerRepository.findTimeRange(rfSchema))
+                .containsExactly("20260101120000000", "20260101121000000");
+        assertThat(rfScannerRepository.findBetween(
+                rfSchema,
+                "20260101120000000",
+                "20260101121000000",
+                java.util.List.of("RF-SENSOR-A"),
+                null,
+                null,
+                io.github.krait4g.radarexplorer.model.ApiModels.MatchMode.ALL,
+                0
+        )).hasSize(DemoDataInitializer.EXPECTED_RF_SCANNER_ROWS / 2);
     }
 }

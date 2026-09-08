@@ -2,7 +2,9 @@ package io.github.krait4g.radarexplorer.web;
 
 import io.github.krait4g.radarexplorer.model.ApiModels.DetailResponse;
 import io.github.krait4g.radarexplorer.model.ApiModels.MetaResponse;
+import io.github.krait4g.radarexplorer.model.ApiModels.ObservationsResponse;
 import io.github.krait4g.radarexplorer.model.ApiModels.RadarsResponse;
+import io.github.krait4g.radarexplorer.model.ApiModels.SensorsResponse;
 import io.github.krait4g.radarexplorer.model.ApiModels.SnapshotResponse;
 import io.github.krait4g.radarexplorer.model.ApiModels.TracksResponse;
 import io.github.krait4g.radarexplorer.service.RadarViewerService;
@@ -15,6 +17,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @Validated
 @RestController
@@ -55,6 +59,38 @@ public class RadarViewerController {
             @RequestParam(defaultValue = "true") boolean overview
     ) {
         return service.tracks(from, to, toleranceMs, radarId, radarObjectNo, objectNo, primaryOnly, overview);
+    }
+
+    @GetMapping("/observations")
+    public ObservationsResponse observations(
+            @RequestParam String from,
+            @RequestParam String to,
+            @RequestParam(defaultValue = "750") @Min(0) @Max(30_000) int toleranceMs,
+            @RequestParam(required = false) List<@Size(max = 128) String> source,
+            @RequestParam(required = false) List<@Size(max = 128) String> radarId,
+            @RequestParam(required = false) List<@Size(max = 128) String> rfScannerId,
+            @RequestParam(required = false) @Size(max = 128) String radarObjectNo,
+            @RequestParam(required = false) @Size(max = 128) String objectNo,
+            @RequestParam(required = false) @Size(max = 128) String trackId,
+            @RequestParam(defaultValue = "ALL") @Size(max = 16) String matchMode,
+            @RequestParam(defaultValue = "true") boolean primaryOnly,
+            @RequestParam(defaultValue = "true") boolean overview
+    ) {
+        return service.observations(
+                from, to, toleranceMs, source, radarId, rfScannerId, radarObjectNo, objectNo, trackId,
+                matchMode, primaryOnly, overview
+        );
+    }
+
+    @GetMapping("/sensors")
+    public SensorsResponse sensors(
+            @RequestParam String from,
+            @RequestParam String to,
+            @RequestParam(defaultValue = "750") @Min(0) @Max(30_000) int toleranceMs,
+            @RequestParam(required = false) List<@Size(max = 128) String> source,
+            @RequestParam(defaultValue = "true") boolean primaryOnly
+    ) {
+        return service.sensors(from, to, toleranceMs, source, primaryOnly);
     }
 
     @GetMapping("/radars")

@@ -47,7 +47,11 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 1024,
-          "pattern": "^jdbc:postgresql://[^\\s/@]+(?::[0-9]{1,5})?/[A-Za-z0-9_.-]+(?:\\?[^\\s]*)?$"
+          "description": "PostgreSQL JDBC URL without embedded credentials. Query keys containing 'password', plus pwd, user, and username, are rejected by the launcher.",
+          "pattern": "^jdbc:postgresql://[^\\s/@]+(?::[0-9]{1,5})?/[A-Za-z0-9_.-]+(?:\\?[^\\s]*)?$",
+          "not": {
+            "pattern": "(?:[?&;])(?:[^?&;=]*[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][^?&;=]*|[Pp][Ww][Dd]|[Uu][Ss][Ee][Rr]|[Uu][Ss][Ee][Rr][Nn][Aa][Mm][Ee])="
+          }
         },
         "username": {
           "type": "string",
@@ -100,6 +104,49 @@
             "correctedAltitude": { "$ref": "#/$defs/sqlIdentifier" },
             "primaryFlag": { "$ref": "#/$defs/sqlIdentifier" },
             "referenceAltitude": { "$ref": "#/$defs/sqlIdentifier" }
+          }
+        },
+        "rfScanner": {
+          "type": "object",
+          "description": "Optional RF scanner observation table and logical column mappings.",
+          "additionalProperties": false,
+          "required": ["table", "columns"],
+          "properties": {
+            "table": {
+              "$ref": "#/$defs/sqlIdentifier"
+            },
+            "columns": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "eventId",
+                "observedAt",
+                "fallbackObservedAt",
+                "scannerId",
+                "trackId",
+                "objectId",
+                "longitude",
+                "latitude",
+                "altitude",
+                "homeLongitude",
+                "homeLatitude",
+                "homeAltitude"
+              ],
+              "properties": {
+                "eventId": { "$ref": "#/$defs/sqlIdentifier" },
+                "observedAt": { "$ref": "#/$defs/sqlIdentifier" },
+                "fallbackObservedAt": { "$ref": "#/$defs/sqlIdentifier" },
+                "scannerId": { "$ref": "#/$defs/sqlIdentifier" },
+                "trackId": { "$ref": "#/$defs/sqlIdentifier" },
+                "objectId": { "$ref": "#/$defs/sqlIdentifier" },
+                "longitude": { "$ref": "#/$defs/sqlIdentifier" },
+                "latitude": { "$ref": "#/$defs/sqlIdentifier" },
+                "altitude": { "$ref": "#/$defs/sqlIdentifier" },
+                "homeLongitude": { "$ref": "#/$defs/sqlIdentifier" },
+                "homeLatitude": { "$ref": "#/$defs/sqlIdentifier" },
+                "homeAltitude": { "$ref": "#/$defs/sqlIdentifier" }
+              }
+            }
           }
         }
       }

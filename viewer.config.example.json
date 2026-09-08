@@ -28,6 +28,23 @@
       "correctedAltitude": "corrected_altitude",
       "primaryFlag": "primary_flag",
       "referenceAltitude": "reference_altitude"
+    },
+    "rfScanner": {
+      "table": "rf_scanner_observation",
+      "columns": {
+        "eventId": "event_id",
+        "observedAt": "observed_at",
+        "fallbackObservedAt": "fallback_observed_at",
+        "scannerId": "scanner_id",
+        "trackId": "scanner_track_id",
+        "objectId": "object_id",
+        "longitude": "longitude",
+        "latitude": "latitude",
+        "altitude": "altitude",
+        "homeLongitude": "home_longitude",
+        "homeLatitude": "home_latitude",
+        "homeAltitude": "home_altitude"
+      }
     }
   }
 }

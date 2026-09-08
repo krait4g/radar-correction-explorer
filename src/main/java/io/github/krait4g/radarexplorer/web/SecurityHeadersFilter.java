@@ -39,7 +39,8 @@ public class SecurityHeadersFilter extends OncePerRequestFilter {
         response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
         response.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
 
-        if (request.getRequestURI().startsWith("/api/")) {
+        String requestPath = request.getRequestURI().substring(request.getContextPath().length());
+        if (requestPath.equals("/api") || requestPath.startsWith("/api/")) {
             response.setHeader("Cache-Control", "no-store, max-age=0");
             response.setHeader("Pragma", "no-cache");
         }

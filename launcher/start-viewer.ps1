@@ -39,14 +39,30 @@ $columnEnvironmentMap = [ordered]@{
     referenceAltitude    = "RADAR_DB_COLUMN_REFERENCE_ALTITUDE"
 }
 
+$rfScannerColumnEnvironmentMap = [ordered]@{
+    eventId            = "RADAR_DB_RF_SCANNER_COLUMN_EVENT_ID"
+    observedAt         = "RADAR_DB_RF_SCANNER_COLUMN_OBSERVED_AT"
+    fallbackObservedAt = "RADAR_DB_RF_SCANNER_COLUMN_FALLBACK_OBSERVED_AT"
+    scannerId          = "RADAR_DB_RF_SCANNER_COLUMN_SCANNER_ID"
+    trackId            = "RADAR_DB_RF_SCANNER_COLUMN_TRACK_ID"
+    objectId           = "RADAR_DB_RF_SCANNER_COLUMN_OBJECT_ID"
+    longitude          = "RADAR_DB_RF_SCANNER_COLUMN_LONGITUDE"
+    latitude           = "RADAR_DB_RF_SCANNER_COLUMN_LATITUDE"
+    altitude           = "RADAR_DB_RF_SCANNER_COLUMN_ALTITUDE"
+    homeLongitude      = "RADAR_DB_RF_SCANNER_COLUMN_HOME_LONGITUDE"
+    homeLatitude       = "RADAR_DB_RF_SCANNER_COLUMN_HOME_LATITUDE"
+    homeAltitude       = "RADAR_DB_RF_SCANNER_COLUMN_HOME_ALTITUDE"
+}
+
 $databaseEnvironmentNames = @(
     "RADAR_DB_JDBC_URL",
     "RADAR_DB_USERNAME",
     "RADAR_DB_PASSWORD",
     "RADAR_DB_DISPLAY_LABEL",
     "RADAR_DB_SCHEMA",
-    "RADAR_DB_TABLE"
-) + @($columnEnvironmentMap.Values)
+    "RADAR_DB_TABLE",
+    "RADAR_DB_RF_SCANNER_TABLE"
+) + @($columnEnvironmentMap.Values) + @($rfScannerColumnEnvironmentMap.Values)
 
 function Test-ObjectProperty {
     param([object]$Object, [string]$Name)
@@ -247,7 +263,7 @@ if (-not $Demo -and (Test-Path -LiteralPath $resolvedConfigPath -PathType Leaf))
         }
     }
 
-    Assert-OnlyProperties -Object $configuration.database -Allowed @('jdbcUrl', 'username', 'displayLabel', 'schema', 'table', 'columns') -Location "configuration.database"
+    Assert-OnlyProperties -Object $configuration.database -Allowed @('jdbcUrl', 'username', 'displayLabel', 'schema', 'table', 'columns', 'rfScanner') -Location "configuration.database"
     foreach ($requiredDatabaseProperty in @('jdbcUrl', 'username', 'schema', 'table', 'columns')) {
         if (-not (Test-ObjectProperty $configuration.database $requiredDatabaseProperty)) {
             throw "configuration.database.$requiredDatabaseProperty is required."
@@ -258,7 +274,8 @@ if (-not $Demo -and (Test-Path -LiteralPath $resolvedConfigPath -PathType Leaf))
     if ($jdbcUrl -notmatch "^jdbc:postgresql://[^\s/@]+(?::[0-9]{1,5})?/[A-Za-z0-9_.-]+(?:\?[^\s]*)?$") {
         throw "configuration.database.jdbcUrl must be a PostgreSQL JDBC URL without embedded credentials."
     }
-    if ($jdbcUrl -match "(?i)://[^/?#]*@" -or $jdbcUrl -match "(?i)(?:[?&;]|^)(?:password|pwd|user|username)=") {
+    if ($jdbcUrl -match "(?i)://[^/?#]*@" -or
+        $jdbcUrl -match "(?i)(?:[?&;]|^)(?:[^?&;=]*password[^?&;=]*|pwd|user|username)=") {
         throw "configuration.database.jdbcUrl must not contain credentials."
     }
 
@@ -284,6 +301,23 @@ if (-not $Demo -and (Test-Path -LiteralPath $resolvedConfigPath -PathType Leaf))
             throw "configuration.database.columns.$columnName is required."
         }
         $databaseValues[$columnEnvironmentMap[$columnName]] = Assert-SqlIdentifier -Value $configuration.database.columns.$columnName -Name "configuration.database.columns.$columnName"
+    }
+
+    if (Test-ObjectProperty $configuration.database "rfScanner") {
+        Assert-OnlyProperties -Object $configuration.database.rfScanner -Allowed @('table', 'columns') -Location "configuration.database.rfScanner"
+        foreach ($requiredRfScannerProperty in @('table', 'columns')) {
+            if (-not (Test-ObjectProperty $configuration.database.rfScanner $requiredRfScannerProperty)) {
+                throw "configuration.database.rfScanner.$requiredRfScannerProperty is required."
+            }
+        }
+        $databaseValues["RADAR_DB_RF_SCANNER_TABLE"] = Assert-SqlIdentifier -Value $configuration.database.rfScanner.table -Name "configuration.database.rfScanner.table"
+        Assert-OnlyProperties -Object $configuration.database.rfScanner.columns -Allowed @($rfScannerColumnEnvironmentMap.Keys) -Location "configuration.database.rfScanner.columns"
+        foreach ($columnName in $rfScannerColumnEnvironmentMap.Keys) {
+            if (-not (Test-ObjectProperty $configuration.database.rfScanner.columns $columnName)) {
+                throw "configuration.database.rfScanner.columns.$columnName is required."
+            }
+            $databaseValues[$rfScannerColumnEnvironmentMap[$columnName]] = Assert-SqlIdentifier -Value $configuration.database.rfScanner.columns.$columnName -Name "configuration.database.rfScanner.columns.$columnName"
+        }
     }
 
     $mode = "POSTGRESQL"

@@ -34,6 +34,7 @@ app:
     database:
       schema: ${RADAR_DB_SCHEMA:public}
       table: ${RADAR_DB_TABLE:radar_observation}
+      rf-scanner-table: ${RADAR_DB_RF_SCANNER_TABLE:rf_scanner_observation}
       schema-cache-seconds: ${RADAR_VIEWER_SCHEMA_CACHE_SECONDS:60}
       columns:
         event-id: ${RADAR_DB_COLUMN_EVENT_ID:event_id}
@@ -50,11 +51,24 @@ app:
         corrected-altitude: ${RADAR_DB_COLUMN_CORRECTED_ALTITUDE:corrected_altitude}
         primary-flag: ${RADAR_DB_COLUMN_PRIMARY_FLAG:primary_flag}
         reference-altitude: ${RADAR_DB_COLUMN_REFERENCE_ALTITUDE:reference_altitude}
+      rf-scanner-columns:
+        event-id: ${RADAR_DB_RF_SCANNER_COLUMN_EVENT_ID:event_id}
+        observed-at: ${RADAR_DB_RF_SCANNER_COLUMN_OBSERVED_AT:observed_at}
+        fallback-observed-at: ${RADAR_DB_RF_SCANNER_COLUMN_FALLBACK_OBSERVED_AT:fallback_observed_at}
+        scanner-id: ${RADAR_DB_RF_SCANNER_COLUMN_SCANNER_ID:scanner_id}
+        track-id: ${RADAR_DB_RF_SCANNER_COLUMN_TRACK_ID:scanner_track_id}
+        object-id: ${RADAR_DB_RF_SCANNER_COLUMN_OBJECT_ID:object_id}
+        longitude: ${RADAR_DB_RF_SCANNER_COLUMN_LONGITUDE:longitude}
+        latitude: ${RADAR_DB_RF_SCANNER_COLUMN_LATITUDE:latitude}
+        altitude: ${RADAR_DB_RF_SCANNER_COLUMN_ALTITUDE:altitude}
+        home-longitude: ${RADAR_DB_RF_SCANNER_COLUMN_HOME_LONGITUDE:home_longitude}
+        home-latitude: ${RADAR_DB_RF_SCANNER_COLUMN_HOME_LATITUDE:home_latitude}
+        home-altitude: ${RADAR_DB_RF_SCANNER_COLUMN_HOME_ALTITUDE:home_altitude}
     limits:
       max-tolerance-ms: ${RADAR_VIEWER_MAX_TOLERANCE_MS:30000}
       max-window-seconds: ${RADAR_VIEWER_MAX_WINDOW_SECONDS:300}
-      max-range-seconds: ${RADAR_VIEWER_MAX_RANGE_SECONDS:3600}
-      max-query-rows: ${RADAR_VIEWER_MAX_QUERY_ROWS:100000}
+      max-range-seconds: ${RADAR_VIEWER_MAX_RANGE_SECONDS:0}
+      max-query-rows: ${RADAR_VIEWER_MAX_QUERY_ROWS:0}
       max-overview-points: ${RADAR_VIEWER_MAX_OVERVIEW_POINTS:100000}
       max-concurrent-overview-queries: ${RADAR_VIEWER_MAX_CONCURRENT_OVERVIEW_QUERIES:1}
       statement-timeout-seconds: ${RADAR_VIEWER_STATEMENT_TIMEOUT_SECONDS:10}

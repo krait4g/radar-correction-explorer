@@ -82,6 +82,8 @@ try {
     Assert-True ($example.schemaVersion -eq 1) "Example config uses schemaVersion 1"
     Assert-True ($example.viewer.host -eq "127.0.0.1") "Example binds only to loopback"
     Assert-True ($schema.properties.viewer.properties.host.const -eq "127.0.0.1") "Schema permits only loopback"
+    Assert-True ($example.database.rfScanner.table -eq "rf_scanner_observation") "Example uses the generic RF scanner table"
+    Assert-True ($schema.properties.database.properties.rfScanner.type -eq "object") "Schema supports the optional RF scanner mapping"
     Assert-True (-not ($example.PSObject.Properties.Name -match "(?i)password")) "Example has no top-level password property"
     Assert-True (-not ((Get-Content -LiteralPath $exampleConfigPath -Raw) -match '"[^"\r\n]*password[^"\r\n]*"\s*:')) "Example contains no nested password property"
 
@@ -93,6 +95,21 @@ try {
     Assert-True ($databaseResult.ExitCode -eq 0) "PostgreSQL example validates: $($databaseResult.Output)"
     Assert-True ($databaseResult.Output -match "Configuration valid: POSTGRESQL") "Database validation reports POSTGRESQL mode"
 
+    $radarOnlyPath = Join-Path $testRoot "radar-only.json"
+    $radarOnly = Get-Content -LiteralPath $exampleConfigPath -Raw | ConvertFrom-Json
+    $radarOnly.database.PSObject.Properties.Remove("rfScanner")
+    $radarOnly | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $radarOnlyPath -Encoding UTF8
+    $radarOnlyResult = Invoke-LauncherValidation -ConfigurationPath $radarOnlyPath
+    Assert-True ($radarOnlyResult.ExitCode -eq 0) "RF scanner mapping is optional: $($radarOnlyResult.Output)"
+
+    $badRfIdentifierPath = Join-Path $testRoot "bad-rf-identifier.json"
+    $badRfIdentifier = Get-Content -LiteralPath $exampleConfigPath -Raw | ConvertFrom-Json
+    $badRfIdentifier.database.rfScanner.columns.longitude = "longitude;invalid"
+    $badRfIdentifier | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $badRfIdentifierPath -Encoding UTF8
+    $badRfIdentifierResult = Invoke-LauncherValidation -ConfigurationPath $badRfIdentifierPath
+    Assert-True ($badRfIdentifierResult.ExitCode -ne 0) "Unsafe RF scanner column identifier is rejected"
+    Assert-True ($badRfIdentifierResult.Output -match "must be an unquoted SQL identifier") "RF scanner identifier rejection explains the rule"
+
     $badPasswordPath = Join-Path $testRoot "bad-password.json"
     $badPassword = Get-Content -LiteralPath $exampleConfigPath -Raw | ConvertFrom-Json
     $badPassword.database | Add-Member -NotePropertyName password -NotePropertyValue "must-not-be-stored"
@@ -100,6 +117,14 @@ try {
     $badPasswordResult = Invoke-LauncherValidation -ConfigurationPath $badPasswordPath
     Assert-True ($badPasswordResult.ExitCode -ne 0) "Password property is rejected"
     Assert-True ($badPasswordResult.Output -match "must not contain a password property") "Password rejection explains the safe alternatives"
+
+    $badJdbcPasswordPath = Join-Path $testRoot "bad-jdbc-password.json"
+    $badJdbcPassword = Get-Content -LiteralPath $exampleConfigPath -Raw | ConvertFrom-Json
+    $badJdbcPassword.database.jdbcUrl += "?sslpassword=must-not-be-stored"
+    $badJdbcPassword | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $badJdbcPasswordPath -Encoding UTF8
+    $badJdbcPasswordResult = Invoke-LauncherValidation -ConfigurationPath $badJdbcPasswordPath
+    Assert-True ($badJdbcPasswordResult.ExitCode -ne 0) "JDBC query keys containing password are rejected"
+    Assert-True ($badJdbcPasswordResult.Output -match "jdbcUrl must not contain credentials") "JDBC password rejection explains the rule"
 
     $badHostPath = Join-Path $testRoot "bad-host.json"
     $badHost = Get-Content -LiteralPath $exampleConfigPath -Raw | ConvertFrom-Json
@@ -150,7 +175,20 @@ try {
         "RADAR_DB_COLUMN_CORRECTED_LATITUDE",
         "RADAR_DB_COLUMN_CORRECTED_ALTITUDE",
         "RADAR_DB_COLUMN_PRIMARY_FLAG",
-        "RADAR_DB_COLUMN_REFERENCE_ALTITUDE"
+        "RADAR_DB_COLUMN_REFERENCE_ALTITUDE",
+        "RADAR_DB_RF_SCANNER_TABLE",
+        "RADAR_DB_RF_SCANNER_COLUMN_EVENT_ID",
+        "RADAR_DB_RF_SCANNER_COLUMN_OBSERVED_AT",
+        "RADAR_DB_RF_SCANNER_COLUMN_FALLBACK_OBSERVED_AT",
+        "RADAR_DB_RF_SCANNER_COLUMN_SCANNER_ID",
+        "RADAR_DB_RF_SCANNER_COLUMN_TRACK_ID",
+        "RADAR_DB_RF_SCANNER_COLUMN_OBJECT_ID",
+        "RADAR_DB_RF_SCANNER_COLUMN_LONGITUDE",
+        "RADAR_DB_RF_SCANNER_COLUMN_LATITUDE",
+        "RADAR_DB_RF_SCANNER_COLUMN_ALTITUDE",
+        "RADAR_DB_RF_SCANNER_COLUMN_HOME_LONGITUDE",
+        "RADAR_DB_RF_SCANNER_COLUMN_HOME_LATITUDE",
+        "RADAR_DB_RF_SCANNER_COLUMN_HOME_ALTITUDE"
     )
     $fakeJavaLines = @("@echo off", "(")
     foreach ($captureName in $captureNames) {
@@ -189,6 +227,9 @@ try {
     Assert-True ($capturedEnvironment["RADAR_DB_COLUMN_OBSERVED_AT"] -eq $runtimeConfig.database.columns.observedAt) "Observed-at mapping reaches Java"
     Assert-True ($capturedEnvironment["RADAR_DB_COLUMN_CORRECTED_ALTITUDE"] -eq $runtimeConfig.database.columns.correctedAltitude) "Corrected-altitude mapping reaches Java"
     Assert-True ($capturedEnvironment["RADAR_DB_COLUMN_REFERENCE_ALTITUDE"] -eq $runtimeConfig.database.columns.referenceAltitude) "Reference-altitude mapping reaches Java"
+    Assert-True ($capturedEnvironment["RADAR_DB_RF_SCANNER_TABLE"] -eq $runtimeConfig.database.rfScanner.table) "RF scanner table mapping reaches Java"
+    Assert-True ($capturedEnvironment["RADAR_DB_RF_SCANNER_COLUMN_OBSERVED_AT"] -eq $runtimeConfig.database.rfScanner.columns.observedAt) "RF scanner observed-at mapping reaches Java"
+    Assert-True ($capturedEnvironment["RADAR_DB_RF_SCANNER_COLUMN_HOME_ALTITUDE"] -eq $runtimeConfig.database.rfScanner.columns.homeAltitude) "RF scanner home-altitude mapping reaches Java"
 
     $gitIgnoreText = Get-Content -LiteralPath (Join-Path $projectRoot ".gitignore") -Raw
     Assert-True ($gitIgnoreText -match "(?m)^/viewer\.config\.json\r?$") "Live config is ignored"
@@ -207,6 +248,7 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $testDist "radar-correction-explorer\LICENSE") -PathType Leaf) "Package contains the project license"
     Assert-True (Test-Path -LiteralPath (Join-Path $testDist "radar-correction-explorer\THIRD-PARTY-NOTICES.md") -PathType Leaf) "Package contains third-party notices"
     Assert-True (Test-Path -LiteralPath (Join-Path $testDist "radar-correction-explorer\bom.cdx.json") -PathType Leaf) "Package contains the CycloneDX SBOM"
+    Assert-True (Test-Path -LiteralPath (Join-Path $testDist "radar-correction-explorer\docs\API.md") -PathType Leaf) "Package contains the API reference"
     Assert-True (Test-Path -LiteralPath (Join-Path $testDist "radar-correction-explorer-windows.zip") -PathType Leaf) "Package ZIP is created"
 
     foreach ($scriptPath in @($launcherPath, $packageScriptPath, $PSCommandPath)) {

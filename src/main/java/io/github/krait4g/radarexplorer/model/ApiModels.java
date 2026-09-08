@@ -9,6 +9,17 @@ public final class ApiModels {
     private ApiModels() {
     }
 
+    public enum ObservationSource {
+        RADAR,
+        RFSCNR
+    }
+
+    public enum MatchMode {
+        ALL,
+        MATCHED,
+        UNMATCHED
+    }
+
     public record Coordinate(BigDecimal longitude, BigDecimal latitude, BigDecimal altitude) {
     }
 
@@ -34,7 +45,20 @@ public final class ApiModels {
             boolean correctedLatitude,
             boolean correctedAltitude,
             boolean primaryFlag,
-            boolean referenceAltitude
+            boolean referenceAltitude,
+            boolean radarEvents,
+            boolean radarReady
+    ) {
+    }
+
+    public record RfScannerCapabilities(
+            boolean tableExists,
+            boolean ready,
+            boolean objectMatch,
+            boolean fallbackTime,
+            boolean homePosition,
+            boolean homeAltitude,
+            List<String> missingRequiredColumns
     ) {
     }
 
@@ -72,7 +96,11 @@ public final class ApiModels {
     public record MetaResponse(
             DatabaseStatus database,
             Capabilities capabilities,
+            RfScannerCapabilities rfScannerCapabilities,
             TimeRange timeRange,
+            TimeRange radarTimeRange,
+            TimeRange rfScannerTimeRange,
+            List<String> warnings,
             Limits limits,
             MapConfig map
     ) {
@@ -133,6 +161,88 @@ public final class ApiModels {
     }
 
     public record RadarSummary(String radarId, long eventCount, long objectCount) {
+    }
+
+    public record RfScannerPoint(
+            Long eventId,
+            String eventTime,
+            String timeSource,
+            String rfScannerId,
+            String trackId,
+            String objectNo,
+            boolean matched,
+            Coordinate position,
+            Coordinate home,
+            String altitudeReference
+    ) {
+    }
+
+    public record RfScannerSummary(
+            String rfScannerId,
+            long eventCount,
+            long trackCount,
+            long matchedObjectCount
+    ) {
+    }
+
+    public record RfScannerDataSummary(
+            long sourceRows,
+            int representedRows,
+            int trackCount,
+            long positionCount,
+            long matchedPointCount,
+            int matchedObjectCount
+    ) {
+    }
+
+    public record ObservationSummary(
+            long sourceRows,
+            long radarSourceRows,
+            long rfScannerSourceRows,
+            int radarObjectCount,
+            int rfScannerTrackCount,
+            long matchedRfScannerPointCount,
+            long unmatchedRfScannerPointCount
+    ) {
+    }
+
+    public record ObservationsResponse(
+            String mode,
+            String requestedFrom,
+            String requestedTo,
+            String normalizedFrom,
+            String normalizedTo,
+            int toleranceMs,
+            String rangeStart,
+            String rangeEnd,
+            List<String> selectedSources,
+            String matchMode,
+            boolean primaryOnly,
+            List<String> warnings,
+            ObservationSummary summary,
+            Summary radarSummary,
+            RfScannerDataSummary rfScannerSummary,
+            Sampling sampling,
+            List<RadarPoint> radarPoints,
+            List<RfScannerPoint> rfScannerPoints
+    ) {
+    }
+
+    public record SensorsResponse(
+            String mode,
+            String requestedFrom,
+            String requestedTo,
+            String normalizedFrom,
+            String normalizedTo,
+            int toleranceMs,
+            String rangeStart,
+            String rangeEnd,
+            boolean primaryOnly,
+            List<String> selectedSources,
+            List<String> warnings,
+            List<RadarSummary> radars,
+            List<RfScannerSummary> rfScanners
+    ) {
     }
 
     public record RadarsResponse(

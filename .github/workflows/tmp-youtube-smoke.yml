@@ -1,0 +1,12 @@
+name: tmp-youtube-smoke
+on:
+  push:
+    branches: ['tmp/youtube-analysis-woSiT-kytXo']
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: smoke
+        run: |
+          echo hello
+          python --version

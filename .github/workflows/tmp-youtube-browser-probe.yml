@@ -1,0 +1,71 @@
+name: tmp-youtube-browser-probe
+on:
+  push:
+    branches: ['tmp/youtube-analysis-woSiT-kytXo']
+  workflow_dispatch:
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VIDEO_URL: https://www.youtube.com/watch?v=woSiT_kytXo
+    steps:
+      - name: Probe YouTube player with Chrome
+        run: |
+          set -euxo pipefail
+          mkdir -p browser
+          google-chrome --version || chromium --version || true
+          python -m pip install -U selenium
+          python - <<'PY' > browser/probe.log 2>&1
+          import os,time,json,pathlib
+          from selenium import webdriver
+          from selenium.webdriver.chrome.options import Options
+          from selenium.webdriver.common.by import By
+          o=Options()
+          o.add_argument('--headless=new'); o.add_argument('--no-sandbox'); o.add_argument('--disable-dev-shm-usage')
+          o.add_argument('--autoplay-policy=no-user-gesture-required'); o.add_argument('--mute-audio'); o.add_argument('--window-size=1920,1080')
+          o.add_argument('--lang=ko-KR'); o.set_capability('goog:loggingPrefs', {'performance':'ALL','browser':'ALL'})
+          d=webdriver.Chrome(options=o)
+          try:
+            d.get(os.environ['VIDEO_URL']); time.sleep(8)
+            print('TITLE',d.title); print('URL',d.current_url)
+            pathlib.Path('browser/page.html').write_text(d.page_source,encoding='utf-8')
+            d.save_screenshot('browser/page.png')
+            # consent buttons best effort
+            for xp in ["//button//*[contains(text(),'Accept all')]/..","//button//*[contains(text(),'모두 수락')]/..","//button[contains(.,'Accept all')]","//button[contains(.,'모두 수락')]"]:
+              try:
+                el=d.find_element(By.XPATH,xp); el.click(); time.sleep(5); print('clicked consent'); break
+              except Exception: pass
+            state=d.execute_script("""const v=document.querySelector('video'); return v?{duration:v.duration,currentTime:v.currentTime,readyState:v.readyState,networkState:v.networkState,paused:v.paused,currentSrc:v.currentSrc,src:v.src,error:v.error&&v.error.message}:null""")
+            print('STATE0',json.dumps(state,ensure_ascii=False))
+            if state:
+              d.execute_script("const v=document.querySelector('video'); v.muted=true; v.play().catch(()=>{});")
+              time.sleep(12)
+              state=d.execute_script("""const v=document.querySelector('video'); return {duration:v.duration,currentTime:v.currentTime,readyState:v.readyState,networkState:v.networkState,paused:v.paused,currentSrc:v.currentSrc,src:v.src,videoWidth:v.videoWidth,videoHeight:v.videoHeight,error:v.error&&v.error.message}""")
+              print('STATE1',json.dumps(state,ensure_ascii=False))
+              d.save_screenshot('browser/playing.png')
+            logs=d.get_log('performance')
+            reqs=[]
+            for e in logs:
+              try:
+                m=json.loads(e['message'])['message']
+                if m['method']=='Network.requestWillBeSent':
+                  u=m['params']['request']['url']
+                  if 'googlevideo.com' in u or 'videoplayback' in u or 'youtube.com/api' in u:
+                    reqs.append({'url':u,'headers':m['params']['request'].get('headers',{}),'method':m['params']['request']['method']})
+              except Exception: pass
+            pathlib.Path('browser/network.json').write_text(json.dumps(reqs,ensure_ascii=False,indent=2),encoding='utf-8')
+            print('MEDIA_REQS',sum('googlevideo.com' in x['url'] or 'videoplayback' in x['url'] for x in reqs),'TOTAL_SPECIAL',len(reqs))
+            for x in reqs[:20]: print('REQ',x['url'][:500])
+            try: print('BODYTEXT',d.find_element(By.TAG_NAME,'body').text[:5000])
+            except Exception: pass
+          finally:
+            d.quit()
+          PY
+          cat browser/probe.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: youtube-browser-probe
+          path: browser
+          retention-days: 2
+          compression-level: 0

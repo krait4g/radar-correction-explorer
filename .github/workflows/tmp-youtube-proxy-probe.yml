@@ -1,0 +1,60 @@
+name: tmp-youtube-proxy-probe
+on:
+  push:
+    branches: ['tmp/youtube-analysis-woSiT-kytXo']
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VIDEO_ID: woSiT_kytXo
+    steps:
+      - name: Probe Piped and Invidious instances
+        run: |
+          set +e
+          mkdir -p probe/piped probe/invidious logs
+          python - <<'PY' > logs/probe.log 2>&1
+          import requests, pathlib, json, os, urllib.parse
+          vid=os.environ['VIDEO_ID']
+          s=requests.Session(); s.headers.update({'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/153 Safari/537.36','Accept':'application/json,text/plain,*/*'})
+          piped=[
+          'https://pipedapi.kavin.rocks','https://pipedapi.leptons.xyz','https://pipedapi.nosebs.ru','https://pipedapi-libre.kavin.rocks',
+          'https://piped-api.privacy.com.de','https://pipedapi.adminforge.de','https://api.piped.yt','https://pipedapi.drgns.space',
+          'https://pipedapi.owo.si','https://pipedapi.ducks.party','https://piped-api.codespace.cz','https://pipedapi.reallyaweso.me',
+          'https://api.piped.private.coffee','https://pipedapi.darkness.services','https://pipedapi.orangenet.cc','https://pipedapi.ngn.tf',
+          'https://piped-api.hostux.net','https://pipedapi.12a.app','https://pipedapi.r4fo.com']
+          inv=['https://inv.nadeko.net','https://invidious.nerdvpn.de','https://yt.chocolatemoo53.com','https://invidious.tiekoetter.com','https://invidious.f5.si']
+          ok=[]
+          for base in piped:
+            try:
+              r=s.get(base+'/streams/'+vid,timeout=20)
+              print('PIPED',base,r.status_code,len(r.content),r.headers.get('content-type'))
+              fn=pathlib.Path('probe/piped')/(urllib.parse.quote(base,safe='')+'.txt')
+              fn.write_bytes(r.content[:10_000_000])
+              if r.status_code==200:
+                d=r.json(); v=d.get('videoStreams') or []; a=d.get('audioStreams') or []
+                if v: ok.append(('piped',base,len(v),len(a)))
+            except Exception as e: print('PIPED',base,'ERR',repr(e))
+          for base in inv:
+            try:
+              r=s.get(base+'/api/v1/videos/'+vid,params={'local':'true'},timeout=25)
+              print('INV',base,r.status_code,len(r.content),r.headers.get('content-type'))
+              fn=pathlib.Path('probe/invidious')/(urllib.parse.quote(base,safe='')+'.txt')
+              fn.write_bytes(r.content[:10_000_000])
+              if r.status_code==200:
+                d=r.json(); f=d.get('formatStreams') or []; a=d.get('adaptiveFormats') or []
+                if f or a: ok.append(('invidious',base,len(f),len(a)))
+            except Exception as e: print('INV',base,'ERR',repr(e))
+          pathlib.Path('probe/working.json').write_text(json.dumps(ok,ensure_ascii=False,indent=2),encoding='utf-8')
+          print('WORKING',ok)
+          PY
+          true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: youtube-proxy-probe
+          path: |
+            probe
+            logs
+          retention-days: 2
+          compression-level: 0

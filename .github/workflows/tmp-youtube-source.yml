@@ -1,0 +1,142 @@
+name: tmp-youtube-source-woSiT-kytXo
+on:
+  push:
+    branches: ['tmp/youtube-analysis-woSiT-kytXo']
+  workflow_dispatch:
+
+jobs:
+  fetch-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      VIDEO_ID: woSiT_kytXo
+      VIDEO_URL: https://www.youtube.com/watch?v=woSiT_kytXo
+    steps:
+      - name: Setup
+        run: |
+          set -euxo pipefail
+          mkdir -p evidence/captions evidence/media evidence/manifests evidence/logs
+          python -m pip install -U 'yt-dlp[default,curl-cffi]' youtube-transcript-api requests
+          ffmpeg -version | head -3 | tee evidence/logs/environment.txt
+          yt-dlp --version | tee -a evidence/logs/environment.txt
+
+      - name: Fetch transcript via public API
+        run: |
+          set +e
+          curl -L --retry 3 --connect-timeout 20 --max-time 180 \
+            "https://youtube-transcript.ai/transcript/${VIDEO_ID}.txt?lang=ko" \
+            -o evidence/captions/youtube-transcript-ai-ko.txt \
+            -w '%{http_code}\n' > evidence/logs/yta-ko-http.txt 2> evidence/logs/yta-ko.err
+          curl -L --retry 3 --connect-timeout 20 --max-time 180 \
+            "https://youtube-transcript.ai/transcript/${VIDEO_ID}.txt" \
+            -o evidence/captions/youtube-transcript-ai-default.txt \
+            -w '%{http_code}\n' > evidence/logs/yta-default-http.txt 2> evidence/logs/yta-default.err
+          true
+
+      - name: Fetch captions with youtube-transcript-api
+        run: |
+          set +e
+          python - <<'PY' > evidence/logs/youtube-transcript-api.log 2>&1
+          import json, os
+          from pathlib import Path
+          from youtube_transcript_api import YouTubeTranscriptApi
+          vid=os.environ['VIDEO_ID']; out=Path('evidence/captions')
+          try:
+              api=YouTubeTranscriptApi()
+              tl=api.list(vid)
+              tracks=[]
+              for t in tl:
+                  tracks.append({'language':t.language,'language_code':t.language_code,'is_generated':t.is_generated,'is_translatable':t.is_translatable})
+              (out/'tracks.json').write_text(json.dumps(tracks,ensure_ascii=False,indent=2),encoding='utf-8')
+              chosen=None
+              for pref in ('ko','en'):
+                  try: chosen=tl.find_transcript([pref]); break
+                  except Exception: pass
+              if chosen is None: chosen=next(iter(tl))
+              data=chosen.fetch().to_raw_data()
+              (out/'youtube-transcript-api.json').write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+              with (out/'youtube-transcript-api.txt').open('w',encoding='utf-8') as f:
+                  for x in data: f.write(f"[{x['start']:.3f}-{x['start']+x['duration']:.3f}] {x['text']}\n")
+          except Exception as e:
+              print(type(e).__name__, repr(e))
+          PY
+          true
+
+      - name: Fetch metadata and subtitles with yt-dlp
+        run: |
+          set +e
+          yt-dlp --impersonate chrome --dump-single-json --skip-download "$VIDEO_URL" \
+            > evidence/manifests/yt-dlp-info.json 2> evidence/logs/yt-dlp-info.err
+          yt-dlp --impersonate chrome --skip-download --write-subs --write-auto-subs \
+            --sub-langs 'ko.*,ko,en.*,en' --sub-format 'vtt/srt/best' \
+            -o 'evidence/captions/%(id)s.%(language)s.%(ext)s' "$VIDEO_URL" \
+            > evidence/logs/yt-dlp-subs.out 2> evidence/logs/yt-dlp-subs.err
+          true
+
+      - name: Download video with yt-dlp
+        run: |
+          set +e
+          yt-dlp --impersonate chrome \
+            --extractor-args 'youtube:player_client=android,web,web_safari' \
+            -f 'bv*[height<=720]+ba/b[height<=720]/best' --merge-output-format mp4 \
+            -o 'evidence/media/source.%(ext)s' "$VIDEO_URL" \
+            > evidence/logs/yt-dlp-video.out 2> evidence/logs/yt-dlp-video.err
+          true
+
+      - name: Piped fallback if needed
+        run: |
+          set +e
+          if ! find evidence/media -maxdepth 1 -type f -name 'source.*' | grep -q .; then
+            python - <<'PY' > evidence/logs/piped-fallback.log 2>&1
+          import os, requests, subprocess, json, pathlib
+          vid=os.environ['VIDEO_ID']; out=pathlib.Path('evidence/media'); out.mkdir(parents=True,exist_ok=True)
+          instances=['https://pipedapi.kavin.rocks','https://api.piped.yt','https://pipedapi.adminforge.de','https://pipedapi.reallyaweso.me','https://api.piped.private.coffee','https://pipedapi.drgns.space','https://pipedapi.owo.si','https://pipedapi.ducks.party','https://piped-api.codespace.cz']
+          s=requests.Session(); s.headers['User-Agent']='Mozilla/5.0'
+          for base in instances:
+              try:
+                  r=s.get(f'{base}/streams/{vid}',timeout=20); print(base,r.status_code,len(r.content))
+                  if r.status_code!=200: continue
+                  data=r.json(); pathlib.Path('evidence/manifests/piped-info.json').write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+                  vids=[v for v in (data.get('videoStreams') or []) if v.get('url') and (v.get('height') or 0)<=720]
+                  auds=[a for a in (data.get('audioStreams') or []) if a.get('url')]
+                  prog=[v for v in vids if not v.get('videoOnly')]
+                  if prog:
+                      prog.sort(key=lambda x:x.get('height') or 0,reverse=True); u=prog[0]['url']
+                      rr=s.get(u,stream=True,timeout=60); rr.raise_for_status()
+                      with open(out/'source.mp4','wb') as f:
+                          for ch in rr.iter_content(1024*1024):
+                              if ch: f.write(ch)
+                      break
+                  vids.sort(key=lambda x:x.get('height') or 0,reverse=True); auds.sort(key=lambda x:x.get('bitrate') or 0,reverse=True)
+                  if vids and auds:
+                      for u,fn in [(vids[0]['url'],out/'video.bin'),(auds[0]['url'],out/'audio.bin')]:
+                          rr=s.get(u,stream=True,timeout=60); rr.raise_for_status()
+                          with open(fn,'wb') as f:
+                              for ch in rr.iter_content(1024*1024):
+                                  if ch: f.write(ch)
+                      subprocess.run(['ffmpeg','-y','-i',str(out/'video.bin'),'-i',str(out/'audio.bin'),'-c','copy',str(out/'source.mp4')],check=True)
+                      break
+              except Exception as e: print(base,repr(e))
+          PY
+          fi
+          true
+
+      - name: Probe and integrity
+        run: |
+          set +e
+          SRC=$(find evidence/media -maxdepth 1 -type f -name 'source.*' | head -1)
+          if [ -n "$SRC" ]; then
+            ffprobe -v error -show_format -show_streams -of json "$SRC" > evidence/manifests/ffprobe.json
+            sha256sum "$SRC" > evidence/manifests/source_sha256.txt
+          fi
+          find evidence -type f -maxdepth 3 -printf '%p\t%s bytes\n' | sort > evidence/manifests/file_sizes.txt
+          true
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-source-woSiT-kytXo
+          path: evidence
+          if-no-files-found: warn
+          retention-days: 2
+          compression-level: 0

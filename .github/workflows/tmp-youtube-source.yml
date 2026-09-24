@@ -16,6 +16,8 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p evidence/captions evidence/media evidence/manifests evidence/logs
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
           python -m pip install -U 'yt-dlp[default,curl-cffi]' youtube-transcript-api requests
           ffmpeg -version | head -3 | tee evidence/logs/environment.txt
           yt-dlp --version | tee -a evidence/logs/environment.txt
